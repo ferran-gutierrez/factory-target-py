@@ -115,6 +115,14 @@ def test_req7_valid_positive_amount_with_whitespace_trim():
     assert result["errors"] == []
 
 
+def test_req7_nan_amount_rejected():
+    csv_text = HEADER + "2024-01-01,food,lunch,NaN\n"
+    result = import_expenses(csv_text)
+
+    assert result["by_category"] == {}
+    assert result["errors"] == [{"line": 2, "reason": "invalid amount"}]
+
+
 def test_req8_line_numbers_are_one_based_physical_lines():
     csv_text = (
         HEADER

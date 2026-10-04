@@ -50,7 +50,7 @@ def import_expenses(csv_text: str) -> dict:
             errors.append({"line": line_num, "reason": "invalid amount"})
             continue
 
-        if amount <= 0:
+        if not amount.is_finite() or amount <= 0:
             errors.append({"line": line_num, "reason": "invalid amount"})
             continue
 
