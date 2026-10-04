@@ -103,6 +103,26 @@ def test_parse_budgets_csv_reads_valid_rows_with_case_insensitive_header():
 @pytest.mark.parametrize(
     "csv_text",
     [
+        "name,limit\nFood,100\n",
+        "category,amount\nFood,100\n",
+        "only\nFood,100\n",
+    ],
+)
+def test_parse_budgets_csv_raises_value_error_for_missing_header_columns(csv_text: str):
+    with pytest.raises(ValueError):
+        parse_budgets_csv(csv_text)
+
+
+def test_parse_budgets_csv_raises_value_error_for_wrong_column_count_on_data_row():
+    csv_text = "category,limit\nFood,100,extra\n"
+
+    with pytest.raises(ValueError):
+        parse_budgets_csv(csv_text)
+
+
+@pytest.mark.parametrize(
+    "csv_text",
+    [
         "category,limit\n,100\n",
         "category,limit\nFood,0\n",
         "category,limit\nFood,-5\n",
