@@ -1,4 +1,4 @@
-"""CLI for python -m factory_target_py.expenses (REQ-13, REQ-14)."""
+"""CLI for python -m factory_target_py.expenses (REQ-11 through REQ-14)."""
 
 from __future__ import annotations
 
@@ -61,3 +61,87 @@ def test_cli_wrong_argument_count_writes_usage_to_stderr_and_exits_nonzero():
     too_many = _run_expenses_module("a.csv", "b.csv")
     assert too_many.returncode != 0
     assert "usage" in too_many.stderr.lower()
+
+
+def test_cli_budgets_flag_without_path_writes_usage_to_stderr_and_exits_nonzero(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--budgets")
+
+    assert result.returncode != 0
+    assert "usage" in result.stderr.lower()
+    assert result.stdout.strip() == ""
+
+
+def test_cli_with_budgets_prints_budget_alerts_in_json(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    result = _run_expenses_module(str(expenses_path), "--budgets", str(budgets_path))
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert set(payload.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "budget_alerts",
+    }
+    assert payload["category_totals"] == {"Food": 12.0}
+    assert payload["month_totals"] == {"2024-05": 12.0}
+    assert payload["errors"] == []
+    assert payload["budget_alerts"] == [
+        {
+            "month": "2024-05",
+            "category": "Food",
+            "total": 12.0,
+            "limit": 10.0,
+            "amount_over": 2.0,
+        }
+    ]
+
+
+def test_cli_unreadable_budgets_file_exits_nonzero_without_success_json(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+    missing_budgets = tmp_path / "missing-budgets.csv"
+
+    result = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(missing_budgets),
+    )
+
+    assert result.returncode != 0
+    assert result.stderr.strip() != ""
+    assert result.stdout.strip() == ""
+
+
+def test_cli_invalid_budgets_csv_exits_nonzero_without_success_json(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,0\n", encoding="utf-8")
+
+    result = _run_expenses_module(str(expenses_path), "--budgets", str(budgets_path))
+
+    assert result.returncode != 0
+    assert result.stderr.strip() != ""
+    assert result.stdout.strip() == ""
