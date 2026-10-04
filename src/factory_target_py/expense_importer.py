@@ -32,6 +32,10 @@ def import_expenses(csv_text: str) -> dict:
             errors.append({"line": line_num, "reason": "invalid date"})
             continue
 
+        if parsed_date.isoformat() != date_str:
+            errors.append({"line": line_num, "reason": "invalid date"})
+            continue
+
         if not category:
             errors.append({"line": line_num, "reason": "empty category"})
             continue

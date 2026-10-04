@@ -62,6 +62,14 @@ def test_req4_invalid_date_format():
     assert result["errors"] == [{"line": 2, "reason": "invalid date"}]
 
 
+def test_req4_rejects_compact_yyyymmdd_without_hyphens():
+    csv_text = HEADER + "20240101,food,lunch,10.00\n"
+    result = import_expenses(csv_text)
+
+    assert result["by_category"] == {}
+    assert result["errors"] == [{"line": 2, "reason": "invalid date"}]
+
+
 def test_req4_date_whitespace_trimmed_before_validation():
     csv_text = HEADER + "  2024-05-01  ,food,lunch,5.00\n"
     result = import_expenses(csv_text)
