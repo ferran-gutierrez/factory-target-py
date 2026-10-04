@@ -9,6 +9,9 @@ description = "Python target project for the LambdaLoopers software factory PoC"
 requires-python = ">=3.12"
 dependencies = []
 
+[project.scripts]
+import-expenses = "factory_target_py.cli:main"
+
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
 
