@@ -11,7 +11,7 @@ FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "expenses_mixed.cs
 
 def test_mixed_fixture_totals_and_errors():
     csv_text = FIXTURE_PATH.read_text(encoding="utf-8")
-    category_totals, month_totals, errors = import_expenses(csv_text)
+    category_totals, month_totals, _, errors = import_expenses(csv_text)
 
     assert category_totals == {"Food": 20.0, "Travel": 100.0}
     assert month_totals == {"2024-01": 12.5, "2024-02": 100.0, "2024-03": 7.5}
