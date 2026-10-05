@@ -74,6 +74,8 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
             if top is not None or index + 1 >= len(rest):
                 fail()
             top_value = rest[index + 1]
+            if top_value.startswith("--"):
+                fail()
             if not top_value.isascii() or not top_value.isdecimal() or int(top_value) <= 0:
                 print(
                     "invalid --top value: expected a positive integer",

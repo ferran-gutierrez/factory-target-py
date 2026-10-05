@@ -815,6 +815,7 @@ def test_REQ_10_cli_invalid_top_writes_error_only_to_stderr(tmp_path: Path, top_
     [
         ("--top",),
         ("--top", "1", "--top", "2"),
+        ("--top", "--month", "2024-05"),
     ],
 )
 def test_REQ_11_cli_missing_or_repeated_top_writes_usage_only_to_stderr(
@@ -831,4 +832,5 @@ def test_REQ_11_cli_missing_or_repeated_top_writes_usage_only_to_stderr(
     assert result.returncode != 0
     assert "usage" in result.stderr.lower()
     assert "--top" in result.stderr
+    assert "invalid --top value" not in result.stderr
     assert result.stdout.strip() == ""
