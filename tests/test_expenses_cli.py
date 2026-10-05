@@ -258,6 +258,70 @@ def test_REQ_6_cli_month_flag_unreadable_paths_and_invalid_budgets_stderr(tmp_pa
     assert invalid_budget.stdout.strip() == ""
 
 
+def test_REQ_1_REQ_3_REQ_4_cli_top_categories_orders_ties_and_includes_all_categories(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,banana,One,5.00\n"
+        "2024-05-02,Apple,Two,5.00\n"
+        "2024-05-03,carrot,Three,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "10")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == [
+        {"category": "carrot", "total": "8.00"},
+        {"category": "Apple", "total": "5.00"},
+        {"category": "banana", "total": "5.00"},
+    ]
+
+
+def test_REQ_2_cli_top_categories_uses_selected_month_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,10.00\n"
+        "2024-06-01,Food,June,20.00\n"
+        "2024-05-02,Travel,May,15.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "1", "--month", "2024-05")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == [{"category": "Travel", "total": "15.00"}]
+
+
+def test_REQ_5_cli_top_categories_is_empty_when_selected_month_has_no_categories(
+    tmp_path: Path,
+):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-01", "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == []
+
+
+@pytest.mark.parametrize("top_value", ("0", "-1", "1.5", "abc"))
+def test_REQ_6_cli_invalid_top_value_writes_error_and_no_json(
+    tmp_path: Path, top_value: str
+):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--top", top_value)
+
+    assert result.returncode == 1
+    assert f"invalid --top value: {top_value}" in result.stderr
+    assert result.stdout == ""
+
+
 def test_cli_prints_two_decimal_strings_for_fraction_category_total(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
