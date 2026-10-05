@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -310,9 +312,7 @@ def test_REQ_5_cli_top_categories_is_empty_when_selected_month_has_no_categories
 
 
 @pytest.mark.parametrize("top_value", ("0", "-1", "1.5", "abc"))
-def test_REQ_6_cli_invalid_top_value_writes_error_and_no_json(
-    tmp_path: Path, top_value: str
-):
+def test_REQ_6_cli_invalid_top_value_writes_error_and_no_json(tmp_path: Path, top_value: str):
     csv_path = _two_month_food_csv(tmp_path)
 
     result = _run_expenses_module(str(csv_path), "--top", top_value)
