@@ -90,18 +90,12 @@ def test_REQ_2_cli_csv_outputs_plain_string_sorted_category_totals(tmp_path: Pat
 def test_REQ_3_cli_csv_applies_month_filter_in_either_flag_order(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-04-01,Food,April,2.00\n"
-        "2024-05-01,Food,May,3.00\n",
+        "date,category,description,amount\n2024-04-01,Food,April,2.00\n2024-05-01,Food,May,3.00\n",
         encoding="utf-8",
     )
 
-    month_first = _run_expenses_module(
-        str(csv_path), "--month", "2024-05", "--format", "csv"
-    )
-    format_first = _run_expenses_module(
-        str(csv_path), "--format", "csv", "--month", "2024-05"
-    )
+    month_first = _run_expenses_module(str(csv_path), "--month", "2024-05", "--format", "csv")
+    format_first = _run_expenses_module(str(csv_path), "--format", "csv", "--month", "2024-05")
 
     assert month_first.returncode == 0
     assert format_first.returncode == 0
