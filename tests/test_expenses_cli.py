@@ -637,6 +637,39 @@ def test_cli_defaults_to_json_and_explicit_json_match(tmp_path: Path):
     assert json.loads(default_result.stdout) == json.loads(explicit_result.stdout)
 
 
+def test_REQ_2_explicit_json_matches_default_with_month_and_budgets(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-15,Food,March,5.00\n"
+        "2024-04-01,Food,April,12.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    default_result = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-04",
+        "--budgets",
+        str(budgets_path),
+    )
+    explicit_result = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "json",
+        "--month",
+        "2024-04",
+        "--budgets",
+        str(budgets_path),
+    )
+
+    assert default_result.returncode == 0, default_result.stderr
+    assert explicit_result.returncode == 0, explicit_result.stderr
+    assert json.loads(default_result.stdout) == json.loads(explicit_result.stdout)
+
+
 def test_REQ_3_cli_csv_sorts_categories_with_plain_string_comparison(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
@@ -657,6 +690,62 @@ def test_REQ_3_cli_csv_sorts_categories_with_plain_string_comparison(tmp_path: P
         "banana,4.00",
     ]
     assert result.stderr == ""
+
+
+def test_REQ_4_cli_csv_month_filters_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-01,MarchOnly,March,2.00\n"
+        "2024-04-01,Zebra,April,3.00\n"
+        "2024-04-02,apple,April,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-04",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Zebra,3.00",
+        "apple,4.00",
+    ]
+
+
+def test_REQ_6_cli_csv_omits_month_totals_and_budget_alerts(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,12.00\n"
+        "2024-06-01,Travel,June,20.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text(
+        "category,limit\nFood,10.00\nTravel,10.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["category,total", "Food,12.00"]
+    assert "month" not in result.stdout
+    assert "budget" not in result.stdout
 
 
 def test_REQ_5_cli_csv_reports_invalid_rows_on_stderr(tmp_path: Path):
