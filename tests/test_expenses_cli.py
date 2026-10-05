@@ -620,3 +620,68 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_REQ_1_format_json_is_default_and_explicit_json_matches(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    default_result = _run_expenses_module(str(csv_path))
+    json_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == 0, default_result.stderr
+    assert json_result.returncode == 0, json_result.stderr
+    assert default_result.stdout == json_result.stdout
+
+
+def test_REQ_2_format_csv_prints_sorted_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,Apple,2.00\n"
+        "2024-05-02,Banana,Banana,3.00\n"
+        "2024-05-03,apple,Another apple,1.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "category,total\nBanana,3.00\napple,3.00\n"
+    assert result.stderr == ""
+
+
+def test_REQ_3_format_csv_applies_month_filter(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-04", "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "category,total\nFood,7.00\n"
+
+
+def test_REQ_5_format_csv_reports_invalid_rows_on_stderr(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-01,,Missing category,2.00\n"
+        "2024-05-01,Travel,,3.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0
+    assert result.stdout == "category,total\nFood,8.00\n"
+    assert result.stderr == "line 3: empty category\nline 4: empty description\n"
+
+
+def test_REQ_6_format_invalid_or_missing_value_writes_usage(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    for format_args in (("--format", "xml"), ("--format",)):
+        result = _run_expenses_module(str(csv_path), *format_args)
+
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
