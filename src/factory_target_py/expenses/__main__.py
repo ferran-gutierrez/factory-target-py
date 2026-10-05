@@ -21,6 +21,8 @@ _USAGE = (
     "usage: python -m factory_target_py.expenses <csv-file> "
     "[--format json|csv] [--month YYYY-MM] [--budgets <budgets-csv>]"
 )
+
+
 def _is_valid_month(month: str) -> bool:
     if len(month) != 7 or not _MONTH_PATTERN.match(month):
         return False
