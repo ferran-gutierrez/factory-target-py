@@ -38,6 +38,41 @@ def test_cli_reads_file_and_prints_json_result(tmp_path: Path):
     assert all(isinstance(value, str) for value in payload["month_totals"].values())
 
 
+def test_REQ_1_explicit_json_matches_default_output(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+
+    default_result = _run_expenses_module(str(csv_path))
+    explicit_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == 0, default_result.stderr
+    assert explicit_result.returncode == 0, explicit_result.stderr
+    assert json.loads(explicit_result.stdout) == json.loads(default_result.stdout)
+
+
+def test_REQ_3_explicit_json_preserves_month_filtered_output(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-04-01,Food,April,3.00\n2024-05-01,Food,May,7.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-05", "--format", "json")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "category_totals": {"Food": "7.00"},
+        "month_totals": {"2024-05": "7.00"},
+        "errors": [],
+        "month": "2024-05",
+    }
+
+
 def test_cli_json_error_objects_use_line_and_reason_keys(tmp_path: Path):
     csv_path = tmp_path / "bad.csv"
     csv_path.write_text(
