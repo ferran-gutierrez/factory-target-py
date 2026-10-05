@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -620,3 +622,220 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_REQ_1_cli_without_top_preserves_json_shape_and_values(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path))
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "category_totals": {"Food": "12.00"},
+        "month_totals": {"2024-05": "12.00"},
+        "errors": [],
+    }
+    assert "top_categories" not in json.loads(result.stdout)
+
+
+def test_REQ_2_and_REQ_3_cli_top_adds_two_decimal_category_items(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Travel,Train,3.50\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert isinstance(payload["top_categories"], list)
+    assert payload["top_categories"] == [
+        {"category": "Food", "total": "8.00"},
+        {"category": "Travel", "total": "3.50"},
+    ]
+    assert all(set(item) == {"category", "total"} for item in payload["top_categories"])
+
+
+def test_REQ_4_cli_top_orders_by_total_descending_and_limits_items(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,A,12.00\n"
+        "2024-05-02,Travel,B,30.00\n"
+        "2024-05-03,Books,C,20.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == [
+        {"category": "Travel", "total": "30.00"},
+        {"category": "Books", "total": "20.00"},
+    ]
+
+
+def test_REQ_5_cli_top_ties_use_plain_category_string_order(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,A,10.00\n"
+        "2024-05-02,Zoo,B,10.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == [
+        {"category": "Zoo", "total": "10.00"},
+        {"category": "apple", "total": "10.00"},
+    ]
+
+
+def test_REQ_6_cli_top_larger_than_category_count_returns_every_category(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,A,2.00\n"
+        "2024-05-02,Travel,B,1.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "5")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == [
+        {"category": "Food", "total": "2.00"},
+        {"category": "Travel", "total": "1.00"},
+    ]
+
+
+def test_REQ_7_cli_top_with_empty_displayed_totals_returns_empty_array(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,A,2.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-06", "--top", "3")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["category_totals"] == {}
+    assert payload["top_categories"] == []
+
+
+def test_REQ_8_cli_top_uses_month_filtered_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-01,Food,March,5.00\n"
+        "2024-04-01,Travel,April,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-04", "--top", "1")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["category_totals"] == {"Travel": "8.00"}
+    assert payload["top_categories"] == [{"category": "Travel", "total": "8.00"}]
+
+
+def test_REQ_9_cli_top_works_with_month_and_budgets_in_either_order(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,12.00\n"
+        "2024-06-01,Travel,June,20.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    month_first = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+        "--top",
+        "1",
+    )
+    top_first = _run_expenses_module(
+        str(expenses_path),
+        "--top",
+        "1",
+        "--budgets",
+        str(budgets_path),
+        "--month",
+        "2024-05",
+    )
+
+    assert month_first.returncode == 0, month_first.stderr
+    assert top_first.returncode == 0, top_first.stderr
+    expected = json.loads(month_first.stdout)
+    assert expected == json.loads(top_first.stdout)
+    assert expected["month"] == "2024-05"
+    assert expected["budget_alerts"] == [
+        {
+            "month": "2024-05",
+            "category": "Food",
+            "total": "12.00",
+            "limit": "10.00",
+            "amount_over": "2.00",
+        }
+    ]
+    assert expected["top_categories"] == [{"category": "Food", "total": "12.00"}]
+
+
+@pytest.mark.parametrize("top_value", ["0", "-1", "1.5", "abc"])
+def test_REQ_10_cli_invalid_top_writes_error_only_to_stderr(
+    tmp_path: Path, top_value: str
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", top_value)
+
+    assert result.returncode == 1
+    assert result.stderr.strip() == "invalid --top value: expected a positive integer"
+    assert result.stdout.strip() == ""
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--top",),
+        ("--top", "1", "--top", "2"),
+    ],
+)
+def test_REQ_11_cli_missing_or_repeated_top_writes_usage_only_to_stderr(
+    tmp_path: Path, args: tuple[str, ...]
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), *args)
+
+    assert result.returncode != 0
+    assert "usage" in result.stderr.lower()
+    assert "--top" in result.stderr
+    assert result.stdout.strip() == ""
