@@ -17,10 +17,9 @@ from factory_target_py.expenses import (
 )
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
-_USAGE_LEGACY = "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>]"
-_USAGE_WITH_MONTH = (
+_USAGE = (
     "usage: python -m factory_target_py.expenses <csv-file> "
-    "[--month YYYY-MM] [--budgets <budgets-csv>]"
+    "[--month YYYY-MM] [--budgets <budgets-csv>] [--format json|csv]"
 )
 
 
@@ -34,11 +33,9 @@ def _is_valid_month(month: str) -> bool:
     return True
 
 
-def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
-    usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
-
+def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, str]:
     def fail() -> None:
-        print(usage, file=sys.stderr)
+        print(_USAGE, file=sys.stderr)
         raise SystemExit(1)
 
     if not argv:
@@ -48,6 +45,7 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
     rest = argv[1:]
     month_filter: str | None = None
     budgets_path: Path | None = None
+    output_format: str | None = None
     index = 0
     while index < len(rest):
         token = rest[index]
@@ -67,12 +65,25 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
             budgets_path = Path(rest[index + 1])
             index += 2
             continue
+        if token == "--format":
+            if output_format is not None:
+                fail()
+            if index + 1 >= len(rest):
+                fail()
+            output_format = rest[index + 1]
+            index += 2
+            continue
         fail()
 
     if month_filter is not None and not _is_valid_month(month_filter):
         fail()
 
-    return expense_path, month_filter, budgets_path
+    if output_format is None:
+        output_format = "json"
+    elif output_format not in ("json", "csv"):
+        fail()
+
+    return expense_path, month_filter, budgets_path, output_format
 
 
 def _decimal_map_to_json(d: dict[str, Decimal]) -> dict[str, str]:
@@ -94,8 +105,20 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
     return result
 
 
+def _print_csv_category_totals(category_totals_json: dict[str, str]) -> None:
+    lines = ["category,total"]
+    for category in sorted(category_totals_json.keys()):
+        lines.append(f"{category},{category_totals_json[category]}")
+    print("\n".join(lines))
+
+
+def _print_csv_errors(errors: list[dict]) -> None:
+    for error in errors:
+        print(f"line {error['line']}: {error['reason']}", file=sys.stderr)
+
+
 def main() -> None:
-    expense_path, month_filter, budgets_path = _parse_cli(sys.argv[1:])
+    expense_path, month_filter, budgets_path, output_format = _parse_cli(sys.argv[1:])
 
     try:
         csv_text = expense_path.read_text(encoding="utf-8")
@@ -135,6 +158,11 @@ def main() -> None:
         payload["budget_alerts"] = _alerts_to_json(
             compute_budget_alerts(month_category_totals, budgets)
         )
+
+    if output_format == "csv":
+        _print_csv_errors(errors)
+        _print_csv_category_totals(payload["category_totals"])
+        return
 
     print(json.dumps(payload))
 
