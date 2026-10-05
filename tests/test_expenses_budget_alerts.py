@@ -91,15 +91,14 @@ def test_import_expenses_returns_month_category_totals_consistent_with_other_tot
     assert errors == []
     assert category_totals == {
         "Food": Decimal("15.50"),
-        "Travel": Decimal("100.00"),
-        "travel": Decimal("20.00"),
+        "Travel": Decimal("120.00"),
     }
     assert month_totals == {
         "2024-01": Decimal("35.50"),
         "2024-02": Decimal("100.00"),
     }
     assert month_category_totals == {
-        "2024-01": {"Food": Decimal("15.50"), "travel": Decimal("20.00")},
+        "2024-01": {"Food": Decimal("15.50"), "Travel": Decimal("20.00")},
         "2024-02": {"Travel": Decimal("100.00")},
     }
     for month_map in month_category_totals.values():
@@ -161,12 +160,35 @@ def test_parse_budgets_csv_skips_all_empty_data_rows_without_error():
 def test_parse_budgets_csv_last_row_wins_for_duplicate_category():
     csv_text = "category,limit\nFood,100\nTravel,50\nFood,200\n"
 
-    budgets = parse_budgets_csv(csv_text)
-    assert budgets == {
-        "Food": Decimal("200.00"),
-        "Travel": Decimal("50.00"),
-    }
-    assert all(isinstance(limit, Decimal) for limit in budgets.values())
+    with pytest.raises(ValueError, match="duplicate category"):
+        parse_budgets_csv(csv_text)
+
+
+def test_REQ_3_compute_budget_alerts_matches_budget_category_case_insensitively():
+    month_category_totals = {"2024-05": {"Food": Decimal("15.00")}}
+    budgets = parse_budgets_csv("category,limit\n FOOD ,10.00\n")
+
+    alerts = compute_budget_alerts(month_category_totals, budgets)
+
+    assert len(alerts) == 1
+    alert = alerts[0]
+    assert alert["category"] == "Food"
+    assert alert["limit"] == Decimal("10.00")
+    assert alert["amount_over"] == Decimal("5.00")
+    assert alert["total"] == Decimal("15.00")
+    assert alert["month"] == "2024-05"
+
+
+@pytest.mark.parametrize(
+    "csv_text",
+    [
+        "category,limit\nFood,100\nFOOD,200\n",
+        "category,limit\n  Food  ,100\nFood,200\n",
+    ],
+)
+def test_REQ_4_parse_budgets_csv_raises_duplicate_category(csv_text: str):
+    with pytest.raises(ValueError, match="duplicate category"):
+        parse_budgets_csv(csv_text)
 
 
 def test_compute_budget_alerts_amount_over_exact_decimal_for_small_fractions():

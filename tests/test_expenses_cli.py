@@ -392,6 +392,80 @@ def test_REQ_10_errors_list_still_includes_all_csv_validation_errors(tmp_path: P
     ]
 
 
+def test_py_20261005_lwd5_REQ_5_cli_merges_food_variants_under_first_row_spelling(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01, Food,Lunch,8.00\n"
+        "2024-05-02,food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path))
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert set(payload["category_totals"].keys()) == {"Food"}
+    assert "food" not in payload["category_totals"]
+    assert payload["category_totals"]["Food"] == "12.00"
+
+
+def test_py_20261005_lwd5_REQ_6_cli_duplicate_budget_categories_exit_nonzero(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text(
+        "category,limit\nFood,10.00\nfood,20.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path), "--budgets", str(budgets_path))
+
+    assert result.returncode != 0
+    assert result.stderr.strip() != ""
+    assert result.stdout.strip() == ""
+
+
+def test_py_20261005_lwd5_REQ_7_cli_month_and_budgets_use_expense_first_canonical_category(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,FOOD,A,8.00\n2024-05-02,food,B,4.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\n Food ,10.00\n", encoding="utf-8")
+
+    result = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["category_totals"] == {"FOOD": "12.00"}
+    assert payload["budget_alerts"] == [
+        {
+            "month": "2024-05",
+            "category": "FOOD",
+            "total": "12.00",
+            "limit": "10.00",
+            "amount_over": "2.00",
+        }
+    ]
+
+
 def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path):
     expenses_path = tmp_path / "expenses.csv"
     expenses_path.write_text(
