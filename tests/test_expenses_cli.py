@@ -687,3 +687,99 @@ def test_REQ_6_and_REQ_7_invalid_or_duplicate_format_is_usage_error(tmp_path: Pa
         assert result.returncode == 1
         assert "usage" in result.stderr.lower()
         assert result.stdout == ""
+
+
+def test_REQ_2_format_json_matches_default_with_month_budgets_and_errors(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,12.00\n"
+        "2024-06-01,Food,June,20.00\n"
+        "2024-05-02,Travel,,3.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    default_result = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+    json_result = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "json",
+        "--budgets",
+        str(budgets_path),
+        "--month",
+        "2024-05",
+    )
+
+    assert default_result.returncode == 0
+    assert json_result.returncode == 0
+    assert json_result.stdout == default_result.stdout
+    assert json_result.stderr == default_result.stderr
+    assert json.loads(json_result.stdout)["errors"] == [
+        {"line": 4, "reason": "empty description"}
+    ]
+
+
+def test_REQ_7_csv_with_month_and_budgets_supports_both_option_orders(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,12.00\n"
+        "2024-06-01,Food,June,20.00\n"
+        "2024-05-02,Travel,,3.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    month_first = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+    budgets_first = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+    )
+
+    assert month_first.returncode == 0
+    assert budgets_first.returncode == 0
+    assert month_first.stdout == "category,total\nFood,12.00\n"
+    assert budgets_first.stdout == month_first.stdout
+    assert month_first.stderr == "line 4: empty description\n"
+    assert budgets_first.stderr == month_first.stderr
+
+
+def test_REQ_7_duplicate_optional_flags_are_usage_errors(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,1.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    for arguments in (
+        ("--format", "csv", "--month", "2024-05", "--month", "2024-06"),
+        ("--format", "csv", "--budgets", str(budgets_path), "--budgets", str(budgets_path)),
+    ):
+        result = _run_expenses_module(str(expenses_path), *arguments)
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
