@@ -633,7 +633,7 @@ def test_REQ_1_default_json_stdout_matches_pre_format_task_shape(tmp_path: Path)
     budgets_path = tmp_path / "budgets.csv"
     budgets_path.write_text("category,limit\nFood,100.00\n", encoding="utf-8")
 
-    result = _run_expenses_module(
+    month_and_budgets = _run_expenses_module(
         str(expenses_path),
         "--month",
         "2024-04",
@@ -641,15 +641,48 @@ def test_REQ_1_default_json_stdout_matches_pre_format_task_shape(tmp_path: Path)
         str(budgets_path),
     )
 
-    assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
-    assert payload == {
-        "category_totals": {"Food": "7.00"},
-        "month_totals": {"2024-04": "7.00"},
-        "errors": [],
-        "month": "2024-04",
-        "budget_alerts": [],
-    }
+    assert month_and_budgets.returncode == 0, month_and_budgets.stderr
+    assert month_and_budgets.stdout == (
+        '{"category_totals": {"Food": "7.00"}, "month_totals": {"2024-04": "7.00"}, '
+        '"errors": [], "month": "2024-04", "budget_alerts": []}\n'
+    )
+
+    simple_path = tmp_path / "simple.csv"
+    simple_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+    alert_budgets = tmp_path / "alert-budgets.csv"
+    alert_budgets.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    expense_only = _run_expenses_module(str(simple_path))
+    assert expense_only.returncode == 0, expense_only.stderr
+    assert expense_only.stdout == (
+        '{"category_totals": {"Food": "12.00"}, "month_totals": {"2024-05": "12.00"}, '
+        '"errors": []}\n'
+    )
+
+    with_budget_alert = _run_expenses_module(str(simple_path), "--budgets", str(alert_budgets))
+    assert with_budget_alert.returncode == 0, with_budget_alert.stderr
+    assert with_budget_alert.stdout == (
+        '{"category_totals": {"Food": "12.00"}, "month_totals": {"2024-05": "12.00"}, '
+        '"errors": [], "budget_alerts": [{"month": "2024-05", "category": "Food", '
+        '"total": "12.00", "limit": "10.00", "amount_over": "2.00"}]}\n'
+    )
+
+    bad_path = tmp_path / "bad.csv"
+    bad_path.write_text(
+        "date,category,description,amount\n2024-05-01,,Snack,3.00\n",
+        encoding="utf-8",
+    )
+    with_errors = _run_expenses_module(str(bad_path))
+    assert with_errors.returncode == 0, with_errors.stderr
+    assert with_errors.stdout == (
+        '{"category_totals": {}, "month_totals": {}, '
+        '"errors": [{"line": 2, "reason": "empty category"}]}\n'
+    )
 
 
 def test_REQ_2_explicit_json_format_matches_omitted_format(tmp_path: Path):
