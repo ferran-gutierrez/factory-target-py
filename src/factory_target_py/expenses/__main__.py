@@ -78,9 +78,17 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
             top_value = rest[index + 1]
             if not re.fullmatch(r"[0-9]+", top_value):
                 fail_top()
-            top_count = int(top_value)
-            if top_count <= 0:
+            significant_digits = top_value.lstrip("0")
+            if not significant_digits:
                 fail_top()
+            max_count = str(sys.maxsize)
+            if len(significant_digits) > len(max_count) or (
+                len(significant_digits) == len(max_count)
+                and significant_digits > max_count
+            ):
+                top_count = sys.maxsize
+            else:
+                top_count = int(significant_digits)
             index += 2
             continue
         fail()

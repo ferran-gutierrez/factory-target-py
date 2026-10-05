@@ -681,6 +681,33 @@ def test_REQ_3_cli_top_categories_larger_than_category_count_lists_all(
     assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
 
 
+def test_REQ_3_cli_top_categories_empty_when_no_categories(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text("date,category,description,amount\n", encoding="utf-8")
+
+    result = _run_expenses_module(str(csv_path), "--top", "1")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == []
+
+
+def test_REQ_1_cli_top_categories_accepts_unbounded_positive_digit_value(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "1" * 5000)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == [
+        {"category": "Food", "total": "8.00"}
+    ]
+
+
 def test_REQ_4_cli_top_categories_follow_month_filter(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
