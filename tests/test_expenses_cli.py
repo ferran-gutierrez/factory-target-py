@@ -620,3 +620,72 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_REQ_1_format_json_is_the_default_output(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    default_result = _run_expenses_module(str(csv_path))
+    json_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == 0
+    assert json_result.returncode == 0
+    assert default_result.stdout == json_result.stdout
+    assert default_result.stderr == json_result.stderr
+
+
+def test_REQ_3_csv_outputs_case_sensitive_sorted_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,Apple,1.10\n"
+        "2024-05-02,Banana,Banana,2.20\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0
+    assert result.stdout == "category,total\nBanana,2.20\napple,1.10\n"
+    assert result.stderr == ""
+
+
+def test_REQ_4_and_REQ_5_csv_filters_month_and_reports_all_errors(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,1.00\n"
+        "2024-06-01,Travel,June,2.00\n"
+        "2024-05-02,,Invalid category,3.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(
+        str(csv_path), "--format", "csv", "--month", "2024-05"
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "category,total\nFood,1.00\n"
+    assert result.stderr == "line 4: empty category\n"
+
+
+def test_REQ_6_and_REQ_7_invalid_or_duplicate_format_is_usage_error(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,1.00\n",
+        encoding="utf-8",
+    )
+
+    for arguments in (
+        ("--format",),
+        ("--format", "xml"),
+        ("--format", "json", "--format", "csv"),
+    ):
+        result = _run_expenses_module(str(csv_path), *arguments)
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
