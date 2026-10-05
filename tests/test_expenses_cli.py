@@ -700,27 +700,53 @@ def test_py_20261005_wa2k_REQ_5_cli_without_top_omits_top_categories_key(tmp_pat
     budgets_path = tmp_path / "budgets.csv"
     budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
 
-    without_top = _run_expenses_module(str(expenses_path), "--budgets", str(budgets_path))
+    with_budgets = _run_expenses_module(str(expenses_path), "--budgets", str(budgets_path))
     with_month = _run_expenses_module(str(expenses_path), "--month", "2024-05")
+    with_month_and_budgets = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
 
-    assert without_top.returncode == 0, without_top.stderr
+    assert with_budgets.returncode == 0, with_budgets.stderr
     assert with_month.returncode == 0, with_month.stderr
-    payload_budgets = json.loads(without_top.stdout)
+    assert with_month_and_budgets.returncode == 0, with_month_and_budgets.stderr
+    payload_budgets = json.loads(with_budgets.stdout)
     payload_month = json.loads(with_month.stdout)
-    assert "top_categories" not in payload_budgets
-    assert "top_categories" not in payload_month
-    assert set(payload_budgets.keys()) == {
-        "category_totals",
-        "month_totals",
-        "errors",
-        "budget_alerts",
+    payload_month_budgets = json.loads(with_month_and_budgets.stdout)
+
+    expected_budget_alerts = [
+        {
+            "month": "2024-05",
+            "category": "Food",
+            "total": "12.00",
+            "limit": "10.00",
+            "amount_over": "2.00",
+        }
+    ]
+    assert payload_budgets == {
+        "category_totals": {"Food": "12.00"},
+        "month_totals": {"2024-05": "12.00"},
+        "errors": [],
+        "budget_alerts": expected_budget_alerts,
     }
-    assert set(payload_month.keys()) == {
-        "category_totals",
-        "month_totals",
-        "errors",
-        "month",
+    assert payload_month == {
+        "category_totals": {"Food": "12.00"},
+        "month_totals": {"2024-05": "12.00"},
+        "errors": [],
+        "month": "2024-05",
     }
+    assert payload_month_budgets == {
+        "category_totals": {"Food": "12.00"},
+        "month_totals": {"2024-05": "12.00"},
+        "errors": [],
+        "month": "2024-05",
+        "budget_alerts": expected_budget_alerts,
+    }
+    for payload in (payload_budgets, payload_month, payload_month_budgets):
+        assert "top_categories" not in payload
 
 
 def test_py_20261005_wa2k_REQ_6_cli_invalid_top_values_exit_without_success_json(
@@ -741,6 +767,8 @@ def test_py_20261005_wa2k_REQ_7_cli_top_flag_misuse_writes_usage_and_exits_nonze
     tmp_path: Path,
 ):
     csv_path = _multi_category_expenses_csv(tmp_path)
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
 
     top_last = _run_expenses_module(str(csv_path), "--top")
     duplicate_top = _run_expenses_module(str(csv_path), "--top", "2", "--top", "1")
@@ -750,8 +778,14 @@ def test_py_20261005_wa2k_REQ_7_cli_top_flag_misuse_writes_usage_and_exits_nonze
         "--month",
         "2024-05",
     )
+    top_followed_by_budgets = _run_expenses_module(
+        str(csv_path),
+        "--top",
+        "--budgets",
+        str(budgets_path),
+    )
 
-    for result in (top_last, duplicate_top, top_followed_by_flag):
+    for result in (top_last, duplicate_top, top_followed_by_flag, top_followed_by_budgets):
         assert result.returncode != 0
         assert "usage" in result.stderr.lower()
         assert result.stdout.strip() == ""
