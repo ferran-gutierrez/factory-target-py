@@ -75,7 +75,7 @@ def test_REQ_2_cli_csv_outputs_plain_string_sorted_category_totals(tmp_path: Pat
     csv_path.write_text(
         "date,category,description,amount\n"
         "2024-05-01,apple,A,1.10\n"
-        "2024-05-02,Banana,B,2.20\n"
+        "2024-05-02,Banana,B,2.20\n",
         encoding="utf-8",
     )
 
