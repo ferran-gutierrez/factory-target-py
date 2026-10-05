@@ -111,9 +111,7 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
 
 
 def _top_categories_to_json(category_totals: dict[str, Decimal], count: int) -> list[dict]:
-    ordered_categories = sorted(
-        category_totals.items(), key=lambda item: (-item[1], item[0])
-    )
+    ordered_categories = sorted(category_totals.items(), key=lambda item: (-item[1], item[0]))
     return [
         {"category": category, "total": money_to_json_string(total)}
         for category, total in ordered_categories[:count]
