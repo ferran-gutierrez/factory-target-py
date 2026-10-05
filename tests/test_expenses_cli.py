@@ -55,6 +55,69 @@ def test_cli_json_error_objects_use_line_and_reason_keys(tmp_path: Path):
     assert payload["errors"][0]["reason"] == "empty category"
 
 
+def test_REQ_1_cli_format_json_matches_default_output(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    default_result = _run_expenses_module(str(csv_path))
+    json_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == 0
+    assert json_result.returncode == 0
+    assert json_result.stdout == default_result.stdout
+    assert json_result.stderr == ""
+
+
+def test_REQ_2_and_REQ_3_cli_csv_outputs_sorted_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Banana,One,2.00\n"
+        "2024-05-02,apple,Two,3.00\n"
+        "2024-06-01,Banana,Three,7.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv", "--month", "2024-05")
+
+    assert result.returncode == 0
+    assert result.stdout == "category,total\nBanana,2.00\napple,3.00\n"
+    assert result.stderr == ""
+
+
+def test_REQ_4_cli_csv_reports_all_errors_on_stderr_without_json(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,,Missing category,3.00\n"
+        "2024-05-01,Food,,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0
+    assert result.stdout == "category,total\n"
+    assert result.stderr == "line 2: empty category\nline 3: empty description\n"
+
+
+def test_REQ_5_cli_format_requires_json_or_csv_value(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    for format_args in (("--format",), ("--format", "xml")):
+        result = _run_expenses_module(str(csv_path), *format_args)
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
+
+
 def test_cli_wrong_argument_count_writes_usage_to_stderr_and_exits_nonzero():
     no_args = _run_expenses_module()
     assert no_args.returncode != 0
