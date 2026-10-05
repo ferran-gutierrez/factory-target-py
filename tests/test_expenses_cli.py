@@ -639,10 +639,42 @@ def test_REQ_1_omits_top_categories_without_top_flag(tmp_path: Path):
     )
     with_month = _run_expenses_module(str(expenses_path), "--month", "2024-05")
 
-    for result in (plain, with_budgets, with_month):
-        assert result.returncode == 0, result.stderr
-        payload = json.loads(result.stdout)
-        assert "top_categories" not in payload
+    assert plain.returncode == 0, plain.stderr
+    plain_payload = json.loads(plain.stdout)
+    assert set(plain_payload.keys()) == {"category_totals", "month_totals", "errors"}
+    assert "top_categories" not in plain_payload
+    assert plain_payload["category_totals"] == {"Food": "8.00"}
+    assert plain_payload["month_totals"] == {"2024-05": "8.00"}
+    assert plain_payload["errors"] == []
+
+    assert with_budgets.returncode == 0, with_budgets.stderr
+    budgets_payload = json.loads(with_budgets.stdout)
+    assert set(budgets_payload.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "budget_alerts",
+    }
+    assert "top_categories" not in budgets_payload
+    assert "month" not in budgets_payload
+    assert budgets_payload["category_totals"] == {"Food": "8.00"}
+    assert budgets_payload["month_totals"] == {"2024-05": "8.00"}
+    assert budgets_payload["errors"] == []
+    assert budgets_payload["budget_alerts"] == []
+
+    assert with_month.returncode == 0, with_month.stderr
+    month_payload = json.loads(with_month.stdout)
+    assert set(month_payload.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "month",
+    }
+    assert "top_categories" not in month_payload
+    assert month_payload["month"] == "2024-05"
+    assert month_payload["category_totals"] == {"Food": "8.00"}
+    assert month_payload["month_totals"] == {"2024-05": "8.00"}
+    assert month_payload["errors"] == []
 
 
 def test_REQ_2_top_categories_includes_category_and_total_strings(tmp_path: Path):
