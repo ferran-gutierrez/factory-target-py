@@ -779,26 +779,69 @@ def test_py_20261005_gd6q_REQ_7_bad_format_flag_usage_stderr_empty_stdout_exit_o
 
 def test_py_20261005_gd6q_REQ_8_format_flag_order_independent_with_month(tmp_path: Path):
     csv_path = _two_month_food_csv(tmp_path)
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
 
-    format_first = _run_expenses_module(
-        str(csv_path),
-        "--format",
-        "csv",
-        "--month",
-        "2024-04",
-    )
-    month_first = _run_expenses_module(
-        str(csv_path),
-        "--month",
-        "2024-04",
-        "--format",
-        "csv",
-    )
+    format_month_runs = [
+        _run_expenses_module(
+            str(csv_path),
+            "--format",
+            "csv",
+            "--month",
+            "2024-04",
+        ),
+        _run_expenses_module(
+            str(csv_path),
+            "--month",
+            "2024-04",
+            "--format",
+            "csv",
+        ),
+    ]
+    format_budgets_runs = [
+        _run_expenses_module(
+            str(csv_path),
+            "--budgets",
+            str(budgets_path),
+            "--format",
+            "csv",
+        ),
+        _run_expenses_module(
+            str(csv_path),
+            "--format",
+            "csv",
+            "--budgets",
+            str(budgets_path),
+        ),
+    ]
 
-    assert format_first.returncode == 0, format_first.stderr
-    assert month_first.returncode == 0, month_first.stderr
-    assert format_first.stdout == month_first.stdout
-    _assert_category_csv_stdout(format_first.stdout, ["Food,7.00"])
+    three_flag_orderings = [
+        ("--format", "csv", "--month", "2024-04", "--budgets", str(budgets_path)),
+        ("--month", "2024-04", "--format", "csv", "--budgets", str(budgets_path)),
+        ("--budgets", str(budgets_path), "--month", "2024-04", "--format", "csv"),
+        ("--format", "csv", "--budgets", str(budgets_path), "--month", "2024-04"),
+        ("--budgets", str(budgets_path), "--format", "csv", "--month", "2024-04"),
+        ("--month", "2024-04", "--budgets", str(budgets_path), "--format", "csv"),
+    ]
+    three_flag_runs = [
+        _run_expenses_module(str(csv_path), *ordering) for ordering in three_flag_orderings
+    ]
+
+    def assert_all_match(runs: list[subprocess.CompletedProcess[str]], label: str) -> str:
+        expected = runs[0].stdout
+        for result in runs:
+            assert result.returncode == 0, f"{label}: {result.stderr}"
+            assert result.stdout == expected, label
+        return expected
+
+    month_stdout = assert_all_match(format_month_runs, "format+month")
+    budgets_stdout = assert_all_match(format_budgets_runs, "format+budgets")
+    all_flags_stdout = assert_all_match(three_flag_runs, "format+month+budgets")
+
+    _assert_category_csv_stdout(month_stdout, ["Food,7.00"])
+    _assert_category_csv_stdout(budgets_stdout, ["Food,12.00"])
+    _assert_category_csv_stdout(all_flags_stdout, ["Food,7.00"])
+    assert month_stdout == all_flags_stdout
 
 
 def test_py_20261005_gd6q_REQ_9_format_csv_with_budgets_stdout_csv_only_and_file_errors(
