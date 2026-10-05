@@ -670,9 +670,7 @@ def test_cli_top_categories_uses_selected_month_totals(tmp_path: Path):
         encoding="utf-8",
     )
 
-    result = _run_expenses_module(
-        str(csv_path), "--top", "1", "--month", "2024-05"
-    )
+    result = _run_expenses_module(str(csv_path), "--top", "1", "--month", "2024-05")
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
