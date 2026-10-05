@@ -34,7 +34,7 @@ def _is_valid_month(month: str) -> bool:
     return True
 
 
-def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | None]:
+def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, str | None]:
     usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
 
     def fail() -> None:
@@ -48,7 +48,7 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
     rest = argv[1:]
     month_filter: str | None = None
     budgets_path: Path | None = None
-    top_count: int | None = None
+    top_count: str | None = None
     index = 0
     while index < len(rest):
         token = rest[index]
@@ -78,10 +78,10 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
             if not re.fullmatch(r"[0-9]+", top_value):
                 print("--top requires a positive integer", file=sys.stderr)
                 raise SystemExit(1)
-            top_count = int(top_value)
-            if top_count <= 0:
+            if not any(character != "0" for character in top_value):
                 print("--top requires a positive integer", file=sys.stderr)
                 raise SystemExit(1)
+            top_count = top_value
             index += 2
             continue
         fail()
@@ -143,9 +143,17 @@ def main() -> None:
             category_totals.items(),
             key=lambda item: (-item[1], item[0]),
         )
+        normalized_top_count = top_count.lstrip("0")
+        category_count = len(ranked_categories)
+        category_count_text = str(category_count)
+        if len(normalized_top_count) < len(category_count_text) or (
+            len(normalized_top_count) == len(category_count_text)
+            and normalized_top_count <= category_count_text
+        ):
+            ranked_categories = ranked_categories[: int(normalized_top_count)]
         payload["top_categories"] = [
             {"category": category, "total": money_to_json_string(total)}
-            for category, total in ranked_categories[:top_count]
+            for category, total in ranked_categories
         ]
 
     if budgets_path is not None:
