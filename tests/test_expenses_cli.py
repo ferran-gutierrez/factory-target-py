@@ -620,3 +620,73 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_cli_defaults_to_json_and_explicit_json_match(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    default_result = _run_expenses_module(str(csv_path))
+    explicit_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == 0
+    assert explicit_result.returncode == 0
+    assert json.loads(default_result.stdout) == json.loads(explicit_result.stdout)
+
+
+def test_REQ_3_cli_csv_sorts_categories_with_plain_string_comparison(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,zebra,One,2.00\n"
+        "2024-05-02,Apple,Two,3.00\n"
+        "2024-05-03,apple,Three,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Apple,3.00",
+        "apple,4.00",
+        "zebra,2.00",
+    ]
+    assert result.stderr == ""
+
+
+def test_REQ_5_cli_csv_reports_invalid_rows_on_stderr(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,,Dinner,4.00\n"
+        "2024-05-03,Travel,,3.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["category,total", "Food,8.00"]
+    assert result.stderr.splitlines() == [
+        "line 3: empty category",
+        "line 4: empty description",
+    ]
+
+
+def test_REQ_7_cli_rejects_invalid_or_missing_format_without_reading_file(tmp_path: Path):
+    missing_path = tmp_path / "missing.csv"
+
+    invalid = _run_expenses_module(str(missing_path), "--format", "xml")
+    missing = _run_expenses_module(str(missing_path), "--format")
+
+    for result in (invalid, missing):
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
+        assert str(missing_path) not in result.stderr
