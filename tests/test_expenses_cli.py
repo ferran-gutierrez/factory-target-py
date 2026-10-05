@@ -658,9 +658,7 @@ def test_REQ_3_top_categories_follow_month_filter(tmp_path: Path):
     result = _run_expenses_module(str(csv_path), "--top", "5", "--month", "2024-05")
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "Food", "total": "12.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "12.00"}]
 
 
 def test_REQ_5_top_categories_larger_than_category_count_lists_all_categories(
@@ -675,15 +673,11 @@ def test_REQ_5_top_categories_larger_than_category_count_lists_all_categories(
     result = _run_expenses_module(str(csv_path), "--top", "10")
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "Food", "total": "8.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
 
 
 @pytest.mark.parametrize("top_value", ["0", "-1", "1.5", "abc"])
-def test_REQ_6_invalid_top_value_writes_clear_error_and_no_stdout(
-    tmp_path: Path, top_value: str
-):
+def test_REQ_6_invalid_top_value_writes_clear_error_and_no_stdout(tmp_path: Path, top_value: str):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text("date,category,description,amount\n", encoding="utf-8")
 

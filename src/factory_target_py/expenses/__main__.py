@@ -18,8 +18,7 @@ from factory_target_py.expenses import (
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 _USAGE_LEGACY = (
-    "usage: python -m factory_target_py.expenses <csv-file> "
-    "[--top N] [--budgets <budgets-csv>]"
+    "usage: python -m factory_target_py.expenses <csv-file> [--top N] [--budgets <budgets-csv>]"
 )
 _USAGE_WITH_MONTH = (
     "usage: python -m factory_target_py.expenses <csv-file> "
