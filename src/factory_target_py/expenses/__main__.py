@@ -98,18 +98,6 @@ def _decimal_map_to_json(d: dict[str, Decimal]) -> dict[str, str]:
     return {key: money_to_json_string(value) for key, value in d.items()}
 
 
-def _reorder_budget_alerts_by_spending(alerts: list[dict]) -> list[dict]:
-    by_month: dict[str, list[dict]] = {}
-    for alert in alerts:
-        by_month.setdefault(alert["month"], []).append(alert)
-    reordered: list[dict] = []
-    for month in sorted(by_month):
-        month_alerts = by_month[month]
-        month_alerts.sort(key=lambda alert: (-alert["total"], alert["category"]))
-        reordered.extend(month_alerts)
-    return reordered
-
-
 def _build_top_categories(category_totals: dict[str, str], top_n: int) -> list[dict[str, str]]:
     entries = [
         {"category": category, "total": total} for category, total in category_totals.items()
@@ -171,10 +159,9 @@ def main() -> None:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
-        alerts = compute_budget_alerts(month_category_totals, budgets)
-        if top_n is not None:
-            alerts = _reorder_budget_alerts_by_spending(alerts)
-        payload["budget_alerts"] = _alerts_to_json(alerts)
+        payload["budget_alerts"] = _alerts_to_json(
+            compute_budget_alerts(month_category_totals, budgets)
+        )
 
     if top_n is not None:
         payload["top_categories"] = _build_top_categories(payload["category_totals"], top_n)
