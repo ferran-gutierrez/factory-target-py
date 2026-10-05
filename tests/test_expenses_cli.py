@@ -703,9 +703,7 @@ def test_REQ_1_cli_top_categories_accepts_unbounded_positive_digit_value(
     result = _run_expenses_module(str(csv_path), "--top", "1" * 5000)
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "Food", "total": "8.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
 
 
 def test_REQ_4_cli_top_categories_follow_month_filter(tmp_path: Path):

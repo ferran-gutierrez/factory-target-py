@@ -83,8 +83,7 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
                 fail_top()
             max_count = str(sys.maxsize)
             if len(significant_digits) > len(max_count) or (
-                len(significant_digits) == len(max_count)
-                and significant_digits > max_count
+                len(significant_digits) == len(max_count) and significant_digits > max_count
             ):
                 top_count = sys.maxsize
             else:
