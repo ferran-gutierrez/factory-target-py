@@ -806,9 +806,7 @@ def test_py_20261005_gd6q_REQ_9_format_csv_with_budgets_stdout_csv_only_and_file
 ):
     expenses_path = tmp_path / "expenses.csv"
     expenses_path.write_text(
-        "date,category,description,amount\n"
-        "2024-05-01,Food,May,12.00\n"
-        "2024-06-01,Food,June,20.00\n",
+        "date,category,description,amount\n2024-05-01,Food,May,12.00\n2024-06-01,Food,June,20.00\n",
         encoding="utf-8",
     )
     budgets_path = tmp_path / "budgets.csv"
