@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -575,6 +577,183 @@ def test_py_20261005_lwd5_REQ_7_cli_month_and_budgets_use_expense_first_canonica
             "amount_over": "2.00",
         }
     ]
+
+
+def test_REQ_1_top_categories_success_includes_money_objects_and_existing_fields(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Books,Novel,12.5\n"
+        "2024-05-02,Coffee,Latte,3.25\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert set(payload) == {"category_totals", "month_totals", "errors", "top_categories"}
+    assert payload["category_totals"] == {"Books": "12.50", "Coffee": "3.25"}
+    assert payload["month_totals"] == {"2024-05": "15.75"}
+    assert payload["errors"] == []
+    assert payload["top_categories"] == [
+        {"category": "Books", "total": "12.50"},
+        {"category": "Coffee", "total": "3.25"},
+    ]
+    assert all(set(entry) == {"category", "total"} for entry in payload["top_categories"])
+    assert all(isinstance(entry["category"], str) for entry in payload["top_categories"])
+    assert all(isinstance(entry["total"], str) for entry in payload["top_categories"])
+
+
+def test_REQ_2_top_categories_sort_by_descending_total_then_plain_string_category(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Alpha,First,5.00\n"
+        "2024-05-02,gamma,Second,10.00\n"
+        "2024-05-03,beta,Third,10.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path), "--top", "3")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == [
+        {"category": "beta", "total": "10.00"},
+        {"category": "gamma", "total": "10.00"},
+        {"category": "Alpha", "total": "5.00"},
+    ]
+
+
+def test_REQ_3_top_categories_truncates_and_larger_limit_returns_every_category_once(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Third,One,4.00\n"
+        "2024-05-02,First,Two,9.00\n"
+        "2024-05-03,Second,Three,9.00\n",
+        encoding="utf-8",
+    )
+
+    top_two = _run_expenses_module(str(expenses_path), "--top", "2")
+    top_more_than_categories = _run_expenses_module(str(expenses_path), "--top", "9")
+
+    assert top_two.returncode == 0, top_two.stderr
+    assert json.loads(top_two.stdout)["top_categories"] == [
+        {"category": "First", "total": "9.00"},
+        {"category": "Second", "total": "9.00"},
+    ]
+    assert top_more_than_categories.returncode == 0, top_more_than_categories.stderr
+    assert json.loads(top_more_than_categories.stdout)["top_categories"] == [
+        {"category": "First", "total": "9.00"},
+        {"category": "Second", "total": "9.00"},
+        {"category": "Third", "total": "4.00"},
+    ]
+
+
+def test_REQ_4_top_categories_is_empty_when_csv_has_no_valid_categories(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path), "--top", "4")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == []
+
+
+def test_REQ_5_top_categories_respects_month_filter(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-04-01,Rent,April payment,20.00\n"
+        "2024-05-01,Food,May lunch,6.00\n"
+        "2024-05-02,Travel,May train,14.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(
+        str(expenses_path),
+        "--top",
+        "3",
+        "--month",
+        "2024-05",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["category_totals"] == {"Food": "6.00", "Travel": "14.00"}
+    assert payload["top_categories"] == [
+        {"category": "Travel", "total": "14.00"},
+        {"category": "Food", "total": "6.00"},
+    ]
+    assert all(entry["category"] != "Rent" for entry in payload["top_categories"])
+
+
+@pytest.mark.parametrize(
+    "top_value",
+    ["0", "-1", "2.5", "abc"],
+)
+def test_REQ_6_invalid_top_values_write_clear_stderr_only_and_exit_one(
+    tmp_path: Path, top_value: str
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path), "--top", top_value)
+
+    assert result.returncode == 1
+    assert "--top" in result.stderr
+    assert result.stdout == ""
+
+
+def test_REQ_6_top_without_value_writes_clear_stderr_only_and_exits_one(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path), "--top")
+
+    assert result.returncode == 1
+    assert "--top" in result.stderr
+    assert result.stdout == ""
+
+
+def test_REQ_7_without_top_output_is_exactly_unchanged(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Travel,Train,12.50\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path))
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "category_totals": {"Food": "8.00", "Travel": "12.50"},
+        "month_totals": {"2024-05": "20.50"},
+        "errors": [],
+    }
+    assert "top_categories" not in json.loads(result.stdout)
 
 
 def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path):

@@ -34,11 +34,15 @@ def _is_valid_month(month: str) -> bool:
     return True
 
 
-def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
+def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | None]:
     usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
 
     def fail() -> None:
         print(usage, file=sys.stderr)
+        raise SystemExit(1)
+
+    def fail_top() -> None:
+        print("invalid --top value", file=sys.stderr)
         raise SystemExit(1)
 
     if not argv:
@@ -48,6 +52,7 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
     rest = argv[1:]
     month_filter: str | None = None
     budgets_path: Path | None = None
+    top_limit: int | None = None
     index = 0
     while index < len(rest):
         token = rest[index]
@@ -67,12 +72,23 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
             budgets_path = Path(rest[index + 1])
             index += 2
             continue
+        if token == "--top":
+            if top_limit is not None or index + 1 >= len(rest):
+                fail_top()
+            top_value = rest[index + 1]
+            if not top_value or any(char < "0" or char > "9" for char in top_value):
+                fail_top()
+            top_limit = int(top_value)
+            if top_limit == 0:
+                fail_top()
+            index += 2
+            continue
         fail()
 
     if month_filter is not None and not _is_valid_month(month_filter):
         fail()
 
-    return expense_path, month_filter, budgets_path
+    return expense_path, month_filter, budgets_path, top_limit
 
 
 def _decimal_map_to_json(d: dict[str, Decimal]) -> dict[str, str]:
@@ -95,7 +111,7 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
 
 
 def main() -> None:
-    expense_path, month_filter, budgets_path = _parse_cli(sys.argv[1:])
+    expense_path, month_filter, budgets_path, top_limit = _parse_cli(sys.argv[1:])
 
     try:
         csv_text = expense_path.read_text(encoding="utf-8")
@@ -120,6 +136,16 @@ def main() -> None:
 
     if month_filter is not None:
         payload["month"] = month_filter
+
+    if top_limit is not None:
+        top_entries = sorted(
+            category_totals.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:top_limit]
+        payload["top_categories"] = [
+            {"category": category, "total": money_to_json_string(total)}
+            for category, total in top_entries
+        ]
 
     if budgets_path is not None:
         try:
