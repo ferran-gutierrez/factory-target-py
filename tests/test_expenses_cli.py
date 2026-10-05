@@ -620,3 +620,236 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_REQ_1_omits_top_categories_without_top_flag(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,100.00\n", encoding="utf-8")
+
+    plain = _run_expenses_module(str(expenses_path))
+    with_budgets = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+    )
+    with_month = _run_expenses_module(str(expenses_path), "--month", "2024-05")
+
+    for result in (plain, with_budgets, with_month):
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert "top_categories" not in payload
+
+
+def test_REQ_2_top_categories_includes_category_and_total_strings(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Travel,Flight,9.00\n"
+        "2024-05-02,Food,Lunch,5.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert "top_categories" in payload
+    assert len(payload["top_categories"]) == 2
+    for entry in payload["top_categories"]:
+        assert set(entry.keys()) == {"category", "total"}
+        assert isinstance(entry["category"], str)
+        assert isinstance(entry["total"], str)
+    assert payload["top_categories"][0] == {"category": "Travel", "total": "9.00"}
+    assert payload["top_categories"][1] == {"category": "Food", "total": "5.00"}
+
+
+def test_REQ_2_accepts_leading_zeros_in_top_value(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Travel,Flight,9.00\n"
+        "2024-05-02,Food,Lunch,5.00\n"
+        "2024-05-03,Misc,Other,1.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "02")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert [entry["category"] for entry in payload["top_categories"]] == [
+        "Travel",
+        "Food",
+    ]
+
+
+def test_REQ_3_top_categories_tie_break_by_category_name_ascending(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Zoo,First,10.00\n"
+        "2024-05-02,Alpha,Second,10.00\n"
+        "2024-05-03,Mid,Third,5.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "3")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    categories = [entry["category"] for entry in payload["top_categories"]]
+    assert categories == ["Alpha", "Zoo", "Mid"]
+    totals = [entry["total"] for entry in payload["top_categories"]]
+    assert totals == ["10.00", "10.00", "5.00"]
+
+
+def test_REQ_4_top_larger_than_category_count_lists_every_category(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,C,Third,1.00\n"
+        "2024-05-02,B,Second,2.00\n"
+        "2024-05-03,A,First,3.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "10")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert len(payload["top_categories"]) == 3
+    assert [entry["category"] for entry in payload["top_categories"]] == [
+        "A",
+        "B",
+        "C",
+    ]
+
+
+def test_REQ_5_invalid_top_numeric_values_write_dedicated_stderr(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    for bad_value in ("0", "-1", "abc", "2.5"):
+        result = _run_expenses_module(str(csv_path), "--top", bad_value)
+        assert result.returncode != 0, bad_value
+        assert "--top" in result.stderr, bad_value
+        assert result.stdout.strip() == "", bad_value
+        assert "Traceback" not in result.stderr, bad_value
+
+
+def test_REQ_6_top_flag_missing_value_or_duplicate_writes_usage(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    missing_value = _run_expenses_module(str(csv_path), "--top")
+    assert missing_value.returncode != 0
+    assert "usage" in missing_value.stderr.lower()
+    assert missing_value.stdout.strip() == ""
+
+    duplicate = _run_expenses_module(str(csv_path), "--top", "1", "--top", "2")
+    assert duplicate.returncode != 0
+    assert "usage" in duplicate.stderr.lower()
+    assert duplicate.stdout.strip() == ""
+
+
+def test_REQ_7_top_categories_respect_month_filter(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-03-01,Food,A,5.00\n2024-04-01,Travel,B,9.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-04", "--top", "1")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["category_totals"] == {"Travel": "9.00"}
+    assert payload["top_categories"] == [{"category": "Travel", "total": "9.00"}]
+
+
+def test_REQ_8_top_month_and_budgets_flags_produce_identical_json(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,12.00\n"
+        "2024-05-02,Travel,Flight,20.00\n"
+        "2024-06-01,Food,June,8.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text(
+        "category,limit\nFood,10.00\nTravel,15.00\n",
+        encoding="utf-8",
+    )
+
+    order_a = _run_expenses_module(
+        str(expenses_path),
+        "--top",
+        "2",
+        "--budgets",
+        str(budgets_path),
+        "--month",
+        "2024-05",
+    )
+    order_b = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-05",
+        "--top",
+        "2",
+        "--budgets",
+        str(budgets_path),
+    )
+
+    assert order_a.returncode == 0, order_a.stderr
+    assert order_b.returncode == 0, order_b.stderr
+    assert json.loads(order_a.stdout) == json.loads(order_b.stdout)
+
+
+def test_REQ_9_top_with_budgets_includes_alerts_and_ranked_categories(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,food,Lunch,15.00\n"
+        "2024-05-02,Travel,Flight,15.00\n"
+        "2024-02-01,Food,Meal,50.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text(
+        "category,limit\nTravel,10.00\nfood,10.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+        "--top",
+        "2",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert "budget_alerts" in payload
+    assert "top_categories" in payload
+    assert [entry["category"] for entry in payload["top_categories"]] == [
+        "food",
+        "Travel",
+    ]
+    assert [alert["category"] for alert in payload["budget_alerts"]] == [
+        "food",
+        "food",
+        "Travel",
+    ]
