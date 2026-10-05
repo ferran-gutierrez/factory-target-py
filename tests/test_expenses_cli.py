@@ -805,6 +805,17 @@ def test_py_20261005_n4mz_REQ_8_csv_with_budgets_stdout_excludes_alerts(tmp_path
     missing_budgets = tmp_path / "missing-budgets.csv"
     dup_budgets = tmp_path / "dup.csv"
     dup_budgets.write_text("category,limit\nFood,10.00\nfood,20.00\n", encoding="utf-8")
+    bad_budgets = tmp_path / "bad-budgets.csv"
+    bad_budgets.write_text("category,limit\nFood,0\n", encoding="utf-8")
+
+    json_with_budgets = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+    )
+    assert json_with_budgets.returncode == 0, json_with_budgets.stderr
+    json_payload = json.loads(json_with_budgets.stdout)
+    assert json_payload["budget_alerts"]
 
     ok = _run_expenses_module(
         str(expenses_path),
@@ -816,7 +827,13 @@ def test_py_20261005_n4mz_REQ_8_csv_with_budgets_stdout_excludes_alerts(tmp_path
     assert ok.returncode == 0, ok.stderr
     assert ok.stdout.splitlines() == ["category,total", "Food,12.00"]
     assert "budget" not in ok.stdout.lower()
+    assert "{" not in ok.stdout
 
+    unreadable_json = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(missing_budgets),
+    )
     unreadable = _run_expenses_module(
         str(expenses_path),
         "--format",
@@ -824,10 +841,33 @@ def test_py_20261005_n4mz_REQ_8_csv_with_budgets_stdout_excludes_alerts(tmp_path
         "--budgets",
         str(missing_budgets),
     )
-    assert unreadable.returncode != 0
+    assert unreadable.returncode == unreadable_json.returncode
+    assert unreadable.stderr == unreadable_json.stderr
     assert unreadable.stderr.splitlines() == [str(missing_budgets)]
     assert unreadable.stdout.strip() == ""
 
+    parse_fail_json = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(bad_budgets),
+    )
+    parse_fail = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(bad_budgets),
+    )
+    assert parse_fail.returncode == parse_fail_json.returncode
+    assert parse_fail.stderr == parse_fail_json.stderr
+    assert parse_fail.stderr.strip() == "invalid limit"
+    assert parse_fail.stdout.strip() == ""
+
+    duplicate_json = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(dup_budgets),
+    )
     duplicate = _run_expenses_module(
         str(expenses_path),
         "--format",
@@ -835,7 +875,9 @@ def test_py_20261005_n4mz_REQ_8_csv_with_budgets_stdout_excludes_alerts(tmp_path
         "--budgets",
         str(dup_budgets),
     )
-    assert duplicate.returncode != 0
+    assert duplicate.returncode == duplicate_json.returncode
+    assert duplicate.stderr == duplicate_json.stderr
+    assert duplicate.stderr.strip() == "duplicate category"
     assert duplicate.stdout.strip() == ""
 
 
