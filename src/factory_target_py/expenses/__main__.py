@@ -125,11 +125,7 @@ def main() -> None:
         print(str(expense_path), file=sys.stderr)
         raise SystemExit(1) from None
 
-    merge_case_variants = top_token is None
-    category_totals, month_totals, month_category_totals, errors = import_expenses(
-        csv_text,
-        merge_case_variants=merge_case_variants,
-    )
+    category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
 
     if month_filter is not None:
         category_totals = dict(month_category_totals.get(month_filter, {}))
