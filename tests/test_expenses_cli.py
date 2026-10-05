@@ -701,9 +701,7 @@ def test_REQ_4_cli_top_categories_larger_than_category_count_lists_all_categorie
     result = _run_expenses_module(str(csv_path), "--top", "10")
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "Food", "total": "8.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
 
 
 @pytest.mark.parametrize("top_value", ["0", "-1", "1.5", "abc"])
