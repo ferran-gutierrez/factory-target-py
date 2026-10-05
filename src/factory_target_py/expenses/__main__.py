@@ -120,15 +120,13 @@ def _top_categories_to_json(
     )
     normalized_count = count.lstrip("0")
     if len(normalized_count) > len(str(len(ranked))) or (
-        len(normalized_count) == len(str(len(ranked)))
-        and normalized_count >= str(len(ranked))
+        len(normalized_count) == len(str(len(ranked))) and normalized_count >= str(len(ranked))
     ):
         selected = ranked
     else:
         selected = ranked[: int(normalized_count)]
     return [
-        {"category": category, "total": money_to_json_string(total)}
-        for category, total in selected
+        {"category": category, "total": money_to_json_string(total)} for category, total in selected
     ]
 
 
