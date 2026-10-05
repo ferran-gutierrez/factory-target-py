@@ -26,6 +26,8 @@ def money_to_json_string(value: Decimal) -> str:
 
 def import_expenses(
     csv_text: str,
+    *,
+    merge_case_variants: bool = True,
 ) -> tuple[
     dict[str, Decimal],
     dict[str, Decimal],
@@ -70,10 +72,13 @@ def import_expenses(
             errors.append({"line": line_num, "reason": "invalid amount"})
             continue
 
-        normalized = category.casefold()
-        if normalized not in canonical_by_normalized:
-            canonical_by_normalized[normalized] = category
-        category_key = canonical_by_normalized[normalized]
+        if merge_case_variants:
+            normalized = category.casefold()
+            if normalized not in canonical_by_normalized:
+                canonical_by_normalized[normalized] = category
+            category_key = canonical_by_normalized[normalized]
+        else:
+            category_key = category
         category_totals[category_key] = category_totals.get(category_key, _ZERO) + amount
         month_key = date_s[:7]
         month_totals[month_key] = month_totals.get(month_key, _ZERO) + amount
