@@ -83,6 +83,14 @@ def import_expenses(
     return category_totals, month_totals, month_category_totals, errors
 
 
+def compute_top_categories(category_totals: dict[str, Decimal], n: int) -> list[dict]:
+    ranked = sorted(
+        category_totals.items(),
+        key=lambda item: (-item[1], item[0]),
+    )
+    return [{"category": category, "total": total} for category, total in ranked[:n]]
+
+
 def compute_budget_alerts(
     month_category_totals: dict[str, dict[str, Decimal | float]],
     budgets: dict[str, Decimal | float],
