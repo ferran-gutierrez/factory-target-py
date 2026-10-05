@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -14,7 +16,63 @@ from factory_target_py.expenses import (
     parse_budgets_csv,
 )
 
-_USAGE = "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>]"
+_MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
+_USAGE_LEGACY = "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>]"
+_USAGE_WITH_MONTH = (
+    "usage: python -m factory_target_py.expenses <csv-file> "
+    "[--month YYYY-MM] [--budgets <budgets-csv>]"
+)
+
+
+def _is_valid_month(month: str) -> bool:
+    if len(month) != 7 or not _MONTH_PATTERN.match(month):
+        return False
+    try:
+        datetime.strptime(month, "%Y-%m")
+    except ValueError:
+        return False
+    return True
+
+
+def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
+    usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
+
+    def fail() -> None:
+        print(usage, file=sys.stderr)
+        raise SystemExit(1)
+
+    if not argv:
+        fail()
+
+    expense_path = Path(argv[0])
+    rest = argv[1:]
+    month_filter: str | None = None
+    budgets_path: Path | None = None
+    index = 0
+    while index < len(rest):
+        token = rest[index]
+        if token == "--month":
+            if month_filter is not None:
+                fail()
+            if index + 1 >= len(rest):
+                fail()
+            month_filter = rest[index + 1]
+            index += 2
+            continue
+        if token == "--budgets":
+            if budgets_path is not None:
+                fail()
+            if index + 1 >= len(rest):
+                fail()
+            budgets_path = Path(rest[index + 1])
+            index += 2
+            continue
+        fail()
+
+    if month_filter is not None and not _is_valid_month(month_filter):
+        fail()
+
+    return expense_path, month_filter, budgets_path
 
 
 def _decimal_map_to_json(d: dict[str, Decimal]) -> dict[str, str]:
@@ -37,26 +95,26 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
 
 
 def main() -> None:
-    argc = len(sys.argv)
-    if argc not in (2, 4):
-        print(_USAGE, file=sys.stderr)
-        raise SystemExit(1)
-
-    expense_path = Path(sys.argv[1])
-    budgets_path: Path | None = None
-    if argc == 4:
-        if sys.argv[2] != "--budgets":
-            print(_USAGE, file=sys.stderr)
-            raise SystemExit(1)
-        budgets_path = Path(sys.argv[3])
+    expense_path, month_filter, budgets_path = _parse_cli(sys.argv[1:])
 
     csv_text = expense_path.read_text(encoding="utf-8")
     category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
+
+    if month_filter is not None:
+        category_totals = dict(month_category_totals.get(month_filter, {}))
+        month_totals = (
+            {month_filter: month_totals[month_filter]} if month_filter in month_totals else {}
+        )
+        month_category_totals = {month_filter: dict(category_totals)}
+
     payload: dict = {
         "category_totals": _decimal_map_to_json(category_totals),
         "month_totals": _decimal_map_to_json(month_totals),
         "errors": errors,
     }
+
+    if month_filter is not None:
+        payload["month"] = month_filter
 
     if budgets_path is not None:
         try:
