@@ -76,6 +76,37 @@ def test_compute_budget_alerts_ordered_by_month_then_category():
         ("2024-02", "Food"),
     ]
 
+    month_category_totals_ci = {
+        "2024-01": {"food": Decimal("15.00"), "Travel": Decimal("15.00")},
+    }
+    budgets_ci = {"Travel": Decimal("10.00"), "food": Decimal("10.00")}
+    alerts_ci = compute_budget_alerts(month_category_totals_ci, budgets_ci)
+    assert [a["category"] for a in alerts_ci] == ["food", "Travel"]
+
+
+def test_REQ_1_compute_budget_alerts_orders_categories_case_insensitively_within_month():
+    month_category_totals = {
+        "2024-01": {"food": Decimal("15.00"), "Travel": Decimal("15.00")},
+    }
+    budgets = {"Travel": Decimal("10.00"), "food": Decimal("10.00")}
+
+    alerts = compute_budget_alerts(month_category_totals, budgets)
+
+    assert [a["category"] for a in alerts] == ["food", "Travel"]
+
+
+def test_REQ_2_compute_budget_alerts_orders_apple_before_banana_case_insensitive():
+    month_category_totals = {
+        "2024-05": {"Banana": Decimal("15.00"), "apple": Decimal("15.00")},
+    }
+    budgets = {"Banana": Decimal("10.00"), "apple": Decimal("10.00")}
+
+    alerts = compute_budget_alerts(month_category_totals, budgets)
+
+    assert len(alerts) == 2
+    assert alerts[0]["category"] == "apple"
+    assert alerts[1]["category"] == "Banana"
+
 
 def test_import_expenses_returns_month_category_totals_consistent_with_other_totals():
     csv_text = (
