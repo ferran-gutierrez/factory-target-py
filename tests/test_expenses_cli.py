@@ -620,3 +620,82 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_cli_csv_format_prints_case_sensitive_sorted_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,Lower,2.00\n"
+        "2024-05-02,Banana,Upper,3.00\n"
+        "2024-05-03,Apple,Upper,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Apple,4.00",
+        "Banana,3.00",
+        "apple,2.00",
+    ]
+    assert result.stderr == ""
+
+
+def test_cli_csv_format_applies_month_filter_and_reports_errors_on_stderr(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,2.00\n"
+        "2024-06-01,Food,June,3.00\n"
+        "2024-05-02,,Invalid,4.00\n"
+        "2024-05-03,Travel,,5.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["category,total", "Food,2.00"]
+    assert result.stderr.splitlines() == [
+        "line 4: empty category",
+        "line 5: empty description",
+    ]
+
+
+def test_cli_default_and_explicit_json_format_match(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,2.00\n",
+        encoding="utf-8",
+    )
+
+    default_result = _run_expenses_module(str(csv_path))
+    explicit_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == explicit_result.returncode == 0
+    assert default_result.stdout == explicit_result.stdout
+    assert default_result.stderr == explicit_result.stderr
+
+
+def test_cli_invalid_or_missing_format_value_writes_usage_and_no_stdout(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text("date,category,description,amount\n", encoding="utf-8")
+
+    for format_args in (("--format",), ("--format", "xml")):
+        result = _run_expenses_module(str(csv_path), *format_args)
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
