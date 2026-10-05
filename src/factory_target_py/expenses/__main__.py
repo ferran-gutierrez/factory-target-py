@@ -19,8 +19,7 @@ from factory_target_py.expenses import (
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 _TOP_PATTERN = re.compile(r"^[0-9]+$")
 _USAGE_LEGACY = (
-    "usage: python -m factory_target_py.expenses <csv-file> "
-    "[--budgets <budgets-csv>] [--top N]"
+    "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>] [--top N]"
 )
 _USAGE_WITH_MONTH = (
     "usage: python -m factory_target_py.expenses <csv-file> "
@@ -123,7 +122,10 @@ def _top_categories_to_json(
         category_totals.items(),
         key=lambda item: (-item[1], item[0]),
     )
-    return [{"category": category, "total": money_to_json_string(total)} for category, total in ranked[:count]]
+    return [
+        {"category": category, "total": money_to_json_string(total)}
+        for category, total in ranked[:count]
+    ]
 
 
 def main() -> None:

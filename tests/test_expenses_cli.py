@@ -681,9 +681,7 @@ def test_REQ_2_and_REQ_6_top_categories_follow_month_and_allow_large_n(
 ):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-05-01,Food,May,8.00\n"
-        "2024-06-01,Travel,June,4.00\n",
+        "date,category,description,amount\n2024-05-01,Food,May,8.00\n2024-06-01,Travel,June,4.00\n",
         encoding="utf-8",
     )
 
