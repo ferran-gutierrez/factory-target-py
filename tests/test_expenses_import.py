@@ -13,6 +13,21 @@ def _errors_by_line(errors: list[dict]) -> dict[int, str]:
     return {entry["line"]: entry["reason"] for entry in errors}
 
 
+def _assert_all_totals_are_decimal(
+    category_totals: dict[str, Decimal],
+    month_totals: dict[str, Decimal],
+    month_category_totals: dict[str, dict[str, Decimal]] | None = None,
+) -> None:
+    for value in category_totals.values():
+        assert isinstance(value, Decimal)
+    for value in month_totals.values():
+        assert isinstance(value, Decimal)
+    if month_category_totals is not None:
+        for by_category in month_category_totals.values():
+            for value in by_category.values():
+                assert isinstance(value, Decimal)
+
+
 def test_import_returns_tuple_with_expected_keys_and_shapes():
     csv_text = "date,category,description,amount\n"
     category_totals, month_totals, _, errors = import_expenses(csv_text)
@@ -39,8 +54,7 @@ def test_header_is_case_insensitive_and_not_counted_as_data():
     assert errors == []
     assert category_totals == {"Food": Decimal("9.25")}
     assert month_totals == {"2024-06": Decimal("9.25")}
-    assert isinstance(category_totals["Food"], Decimal)
-    assert isinstance(month_totals["2024-06"], Decimal)
+    _assert_all_totals_are_decimal(category_totals, month_totals)
 
 
 def test_wrong_number_of_columns_records_error_with_line_number():
@@ -57,6 +71,7 @@ def test_fields_are_stripped_before_validation():
     assert errors == []
     assert category_totals == {"Travel": Decimal("15.00")}
     assert month_totals == {"2024-01": Decimal("15.00")}
+    _assert_all_totals_are_decimal(category_totals, month_totals)
 
 
 def test_all_empty_fields_after_strip_skipped_without_error():
@@ -145,7 +160,7 @@ def test_valid_rows_aggregate_by_category_and_month():
         "2024-02-01,Travel,Flight,100.00\n"
         "2024-01-25,travel,Train,20.00\n"
     )
-    category_totals, month_totals, _, errors = import_expenses(csv_text)
+    category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
     assert errors == []
     assert category_totals == {
         "Food": Decimal("15.50"),
@@ -156,10 +171,7 @@ def test_valid_rows_aggregate_by_category_and_month():
         "2024-01": Decimal("35.50"),
         "2024-02": Decimal("100.00"),
     }
-    for value in category_totals.values():
-        assert isinstance(value, Decimal)
-    for value in month_totals.values():
-        assert isinstance(value, Decimal)
+    _assert_all_totals_are_decimal(category_totals, month_totals, month_category_totals)
 
 
 def test_totals_equal_mathematical_sum_of_parsed_amounts():
@@ -173,6 +185,7 @@ def test_totals_equal_mathematical_sum_of_parsed_amounts():
     assert errors == []
     assert category_totals["Food"] == Decimal("0.60")
     assert month_totals["2024-03"] == Decimal("0.60")
+    _assert_all_totals_are_decimal(category_totals, month_totals)
 
 
 def test_import_accumulates_category_total_with_decimal_not_float():
@@ -184,10 +197,12 @@ def test_import_accumulates_category_total_with_decimal_not_float():
     assert isinstance(category_totals["Food"], Decimal)
     assert month_totals["2024-03"] == Decimal("0.30")
     assert month_category_totals["2024-03"]["Food"] == Decimal("0.30")
+    _assert_all_totals_are_decimal(category_totals, month_totals, month_category_totals)
 
 
 def test_quoted_csv_fields_parsed_with_standard_csv_rules():
     csv_text = 'date,category,description,amount\n2024-04-01,Food,"Lunch, special",12.00\n'
-    category_totals, _, _, errors = import_expenses(csv_text)
+    category_totals, month_totals, _, errors = import_expenses(csv_text)
     assert errors == []
     assert category_totals == {"Food": Decimal("12.00")}
+    _assert_all_totals_are_decimal(category_totals, month_totals)
