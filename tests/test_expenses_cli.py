@@ -647,6 +647,32 @@ def test_REQ_4_cli_top_categories_includes_all_categories_when_n_is_larger(
     assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
 
 
+def test_REQ_4_cli_top_categories_is_empty_for_month_without_categories(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-06", "--top", "1")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == []
+
+
+def test_REQ_1_cli_accepts_arbitrarily_long_positive_top_value(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "9" * 5000)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
+
+
 def test_REQ_5_cli_rejects_invalid_top_values_without_stdout(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(

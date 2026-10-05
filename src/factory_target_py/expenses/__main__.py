@@ -79,9 +79,13 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
             top_value = rest[index + 1]
             if not top_value or any(char < "0" or char > "9" for char in top_value):
                 fail(_TOP_ERROR)
-            top_count = int(top_value)
-            if top_count == 0:
+            significant_value = top_value.lstrip("0")
+            if not significant_value:
                 fail(_TOP_ERROR)
+            if len(significant_value) > len(str(sys.maxsize)):
+                top_count = sys.maxsize
+            else:
+                top_count = int(significant_value)
             index += 2
             continue
         fail()
