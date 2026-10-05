@@ -90,12 +90,13 @@ def compute_budget_alerts(
     alerts: list[dict] = []
     for month in sorted(month_category_totals):
         cats = month_category_totals[month]
-        for budget_category in sorted(budgets):
+        month_alerts: list[dict] = []
+        for budget_category in budgets:
             expense_category = _resolve_category_key(cats, budget_category)
             total = _coerce_decimal(cats.get(expense_category, _ZERO))
             limit = _coerce_decimal(budgets[budget_category])
             if total > limit:
-                alerts.append(
+                month_alerts.append(
                     {
                         "month": month,
                         "category": expense_category,
@@ -104,6 +105,8 @@ def compute_budget_alerts(
                         "amount_over": total - limit,
                     }
                 )
+        month_alerts.sort(key=lambda alert: alert["category"].casefold())
+        alerts.extend(month_alerts)
     return alerts
 
 

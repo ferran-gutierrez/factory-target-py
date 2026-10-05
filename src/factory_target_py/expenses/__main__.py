@@ -97,7 +97,12 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
 def main() -> None:
     expense_path, month_filter, budgets_path = _parse_cli(sys.argv[1:])
 
-    csv_text = expense_path.read_text(encoding="utf-8")
+    try:
+        csv_text = expense_path.read_text(encoding="utf-8")
+    except OSError:
+        print(str(expense_path), file=sys.stderr)
+        raise SystemExit(1) from None
+
     category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
 
     if month_filter is not None:
@@ -119,8 +124,12 @@ def main() -> None:
     if budgets_path is not None:
         try:
             budgets_text = budgets_path.read_text(encoding="utf-8")
+        except OSError:
+            print(str(budgets_path), file=sys.stderr)
+            raise SystemExit(1) from None
+        try:
             budgets = parse_budgets_csv(budgets_text)
-        except (OSError, ValueError) as exc:
+        except ValueError as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
         payload["budget_alerts"] = _alerts_to_json(
