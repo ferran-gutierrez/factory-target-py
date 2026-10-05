@@ -641,9 +641,9 @@ def test_REQ_3_cli_csv_sorts_categories_with_plain_string_comparison(tmp_path: P
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
         "date,category,description,amount\n"
-        "2024-05-01,zebra,One,2.00\n"
-        "2024-05-02,Apple,Two,3.00\n"
-        "2024-05-03,apple,Three,4.00\n",
+        "2024-05-01,Zebra,One,2.00\n"
+        "2024-05-02,apple,Two,3.00\n"
+        "2024-05-03,banana,Three,4.00\n",
         encoding="utf-8",
     )
 
@@ -652,9 +652,9 @@ def test_REQ_3_cli_csv_sorts_categories_with_plain_string_comparison(tmp_path: P
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
         "category,total",
-        "Apple,3.00",
-        "apple,4.00",
-        "zebra,2.00",
+        "Zebra,2.00",
+        "apple,3.00",
+        "banana,4.00",
     ]
     assert result.stderr == ""
 

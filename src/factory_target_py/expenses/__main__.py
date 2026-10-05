@@ -147,9 +147,7 @@ def main() -> None:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
         if output_format == "json":
-            budget_alerts = _alerts_to_json(
-                compute_budget_alerts(month_category_totals, budgets)
-            )
+            budget_alerts = _alerts_to_json(compute_budget_alerts(month_category_totals, budgets))
 
     if output_format == "csv":
         _print_csv(category_totals, errors)
