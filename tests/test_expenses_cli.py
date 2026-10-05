@@ -614,7 +614,7 @@ def test_REQ_2_top_categories_sort_by_descending_total_then_plain_string_categor
     expenses_path.write_text(
         "date,category,description,amount\n"
         "2024-05-01,Alpha,First,5.00\n"
-        "2024-05-02,gamma,Second,10.00\n"
+        "2024-05-02,Gamma,Second,10.00\n"
         "2024-05-03,beta,Third,10.00\n",
         encoding="utf-8",
     )
@@ -624,8 +624,8 @@ def test_REQ_2_top_categories_sort_by_descending_total_then_plain_string_categor
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["top_categories"] == [
+        {"category": "Gamma", "total": "10.00"},
         {"category": "beta", "total": "10.00"},
-        {"category": "gamma", "total": "10.00"},
         {"category": "Alpha", "total": "5.00"},
     ]
 
