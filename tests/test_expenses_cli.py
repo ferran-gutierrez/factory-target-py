@@ -414,6 +414,17 @@ def test_REQ_6_budget_alerts_use_only_spending_in_selected_month(tmp_path: Path)
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
+    assert set(payload.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "month",
+        "budget_alerts",
+    }
+    assert payload["month"] == "2024-05"
+    assert payload["category_totals"] == {"Food": "12.00"}
+    assert payload["month_totals"] == {"2024-05": "12.00"}
+    assert payload["errors"] == []
     assert payload["budget_alerts"] == [
         {
             "month": "2024-05",
@@ -423,6 +434,7 @@ def test_REQ_6_budget_alerts_use_only_spending_in_selected_month(tmp_path: Path)
             "amount_over": "2.00",
         }
     ]
+    assert "top_categories" not in payload
 
 
 def test_REQ_7_invalid_month_values_write_usage_and_exit_nonzero(tmp_path: Path):
@@ -785,6 +797,45 @@ def test_REQ_6_success_json_omits_top_categories_without_flag(tmp_path: Path):
     assert payload_with_month["month_totals"] == payload_without_top["month_totals"]
     assert payload_with_month["errors"] == []
     assert "top_categories" not in payload_with_month
+
+    combined_expenses = tmp_path / "combined_expenses.csv"
+    combined_expenses.write_text(
+        "date,category,description,amount\n2024-05-01,Food,May,12.00\n2024-06-01,Food,June,20.00\n",
+        encoding="utf-8",
+    )
+    combined_budgets = tmp_path / "combined_budgets.csv"
+    combined_budgets.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    with_month_and_budgets = _run_expenses_module(
+        str(combined_expenses),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(combined_budgets),
+    )
+    assert with_month_and_budgets.returncode == 0, with_month_and_budgets.stderr
+    payload_combined = json.loads(with_month_and_budgets.stdout)
+    assert set(payload_combined.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "month",
+        "budget_alerts",
+    }
+    assert payload_combined["month"] == "2024-05"
+    assert payload_combined["category_totals"] == {"Food": "12.00"}
+    assert payload_combined["month_totals"] == {"2024-05": "12.00"}
+    assert payload_combined["errors"] == []
+    assert payload_combined["budget_alerts"] == [
+        {
+            "month": "2024-05",
+            "category": "Food",
+            "total": "12.00",
+            "limit": "10.00",
+            "amount_over": "2.00",
+        }
+    ]
+    assert "top_categories" not in payload_combined
 
 
 def test_REQ_7_invalid_top_values_error_stderr_exit_one(tmp_path: Path):
