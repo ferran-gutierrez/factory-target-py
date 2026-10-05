@@ -687,9 +687,7 @@ def test_REQ_4_cli_top_orders_by_total_descending_and_limits_items(tmp_path: Pat
 def test_REQ_5_cli_top_ties_use_plain_category_string_order(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-05-01,apple,A,10.00\n"
-        "2024-05-02,Zoo,B,10.00\n",
+        "date,category,description,amount\n2024-05-01,apple,A,10.00\n2024-05-02,Zoo,B,10.00\n",
         encoding="utf-8",
     )
 
@@ -705,9 +703,7 @@ def test_REQ_5_cli_top_ties_use_plain_category_string_order(tmp_path: Path):
 def test_REQ_6_cli_top_larger_than_category_count_returns_every_category(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-05-01,Food,A,2.00\n"
-        "2024-05-02,Travel,B,1.00\n",
+        "date,category,description,amount\n2024-05-01,Food,A,2.00\n2024-05-02,Travel,B,1.00\n",
         encoding="utf-8",
     )
 
@@ -723,8 +719,7 @@ def test_REQ_6_cli_top_larger_than_category_count_returns_every_category(tmp_pat
 def test_REQ_7_cli_top_with_empty_displayed_totals_returns_empty_array(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-05-01,Food,A,2.00\n",
+        "date,category,description,amount\n2024-05-01,Food,A,2.00\n",
         encoding="utf-8",
     )
 
@@ -801,9 +796,7 @@ def test_REQ_9_cli_top_works_with_month_and_budgets_in_either_order(tmp_path: Pa
 
 
 @pytest.mark.parametrize("top_value", ["0", "-1", "1.5", "abc"])
-def test_REQ_10_cli_invalid_top_writes_error_only_to_stderr(
-    tmp_path: Path, top_value: str
-):
+def test_REQ_10_cli_invalid_top_writes_error_only_to_stderr(tmp_path: Path, top_value: str):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
         "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
