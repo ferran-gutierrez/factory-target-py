@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 from factory_target_py.expenses import (
@@ -22,16 +24,19 @@ def test_compute_budget_alerts_emits_alert_with_required_fields_when_over_budget
     assert set(alert.keys()) == {"month", "category", "total", "limit", "amount_over"}
     assert alert["month"] == "2024-05"
     assert alert["category"] == "Food"
-    assert alert["total"] == 120.0
-    assert alert["limit"] == 100.0
-    assert alert["amount_over"] == 20.0
+    assert alert["total"] == Decimal("120.00")
+    assert alert["limit"] == Decimal("100.00")
+    assert alert["amount_over"] == Decimal("20.00")
+    assert isinstance(alert["total"], Decimal)
+    assert isinstance(alert["limit"], Decimal)
+    assert isinstance(alert["amount_over"], Decimal)
 
 
 def test_compute_budget_alerts_ignores_categories_absent_from_budgets():
     month_category_totals = {
-        "2024-01": {"Food": 500.0, "Travel": 800.0},
+        "2024-01": {"Food": Decimal("500.00"), "Travel": Decimal("800.00")},
     }
-    budgets = {"Food": 10.0}
+    budgets = {"Food": Decimal("10.00")}
 
     alerts = compute_budget_alerts(month_category_totals, budgets)
 
@@ -41,27 +46,27 @@ def test_compute_budget_alerts_ignores_categories_absent_from_budgets():
 
 def test_compute_budget_alerts_no_alert_when_total_at_or_under_limit():
     month_category_totals = {
-        "2024-01": {"Food": 100.0},
-        "2024-02": {"Food": 99.99},
+        "2024-01": {"Food": Decimal("100.00")},
+        "2024-02": {"Food": Decimal("99.99")},
     }
-    budgets = {"Food": 100.0}
+    budgets = {"Food": Decimal("100.00")}
 
     assert compute_budget_alerts(month_category_totals, budgets) == []
 
 
 def test_compute_budget_alerts_missing_inner_category_treated_as_zero_total():
-    month_category_totals = {"2024-03": {"Travel": 50.0}}
-    budgets = {"Food": 25.0}
+    month_category_totals = {"2024-03": {"Travel": Decimal("50.00")}}
+    budgets = {"Food": Decimal("25.00")}
 
     assert compute_budget_alerts(month_category_totals, budgets) == []
 
 
 def test_compute_budget_alerts_ordered_by_month_then_category():
     month_category_totals = {
-        "2024-02": {"Food": 50.0},
-        "2024-01": {"Travel": 40.0, "Food": 30.0},
+        "2024-02": {"Food": Decimal("50.00")},
+        "2024-01": {"Travel": Decimal("40.00"), "Food": Decimal("30.00")},
     }
-    budgets = {"Food": 1.0, "Travel": 1.0}
+    budgets = {"Food": Decimal("1.00"), "Travel": Decimal("1.00")}
 
     alerts = compute_budget_alerts(month_category_totals, budgets)
 
@@ -84,12 +89,22 @@ def test_import_expenses_returns_month_category_totals_consistent_with_other_tot
     category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
 
     assert errors == []
-    assert category_totals == {"Food": 15.5, "Travel": 100.0, "travel": 20.0}
-    assert month_totals == {"2024-01": 35.5, "2024-02": 100.0}
-    assert month_category_totals == {
-        "2024-01": {"Food": 15.5, "travel": 20.0},
-        "2024-02": {"Travel": 100.0},
+    assert category_totals == {
+        "Food": Decimal("15.50"),
+        "Travel": Decimal("100.00"),
+        "travel": Decimal("20.00"),
     }
+    assert month_totals == {
+        "2024-01": Decimal("35.50"),
+        "2024-02": Decimal("100.00"),
+    }
+    assert month_category_totals == {
+        "2024-01": {"Food": Decimal("15.50"), "travel": Decimal("20.00")},
+        "2024-02": {"Travel": Decimal("100.00")},
+    }
+    for month_map in month_category_totals.values():
+        for value in month_map.values():
+            assert isinstance(value, Decimal)
 
 
 def test_parse_budgets_csv_reads_valid_rows_with_case_insensitive_header():
@@ -97,7 +112,8 @@ def test_parse_budgets_csv_reads_valid_rows_with_case_insensitive_header():
 
     budgets = parse_budgets_csv(csv_text)
 
-    assert budgets == {"Food": 500.0, "Travel": 100.0}
+    assert budgets == {"Food": Decimal("500.00"), "Travel": Decimal("100.00")}
+    assert all(isinstance(limit, Decimal) for limit in budgets.values())
 
 
 @pytest.mark.parametrize(
@@ -137,10 +153,34 @@ def test_parse_budgets_csv_raises_value_error_for_invalid_data_row(csv_text: str
 def test_parse_budgets_csv_skips_all_empty_data_rows_without_error():
     csv_text = "category,limit\n   ,   \nFood,25.00\n,\n"
 
-    assert parse_budgets_csv(csv_text) == {"Food": 25.0}
+    budgets = parse_budgets_csv(csv_text)
+    assert budgets == {"Food": Decimal("25.00")}
+    assert isinstance(budgets["Food"], Decimal)
 
 
 def test_parse_budgets_csv_last_row_wins_for_duplicate_category():
     csv_text = "category,limit\nFood,100\nTravel,50\nFood,200\n"
 
-    assert parse_budgets_csv(csv_text) == {"Food": 200.0, "Travel": 50.0}
+    budgets = parse_budgets_csv(csv_text)
+    assert budgets == {
+        "Food": Decimal("200.00"),
+        "Travel": Decimal("50.00"),
+    }
+    assert all(isinstance(limit, Decimal) for limit in budgets.values())
+
+
+def test_compute_budget_alerts_amount_over_exact_decimal_for_small_fractions():
+    expense_csv = (
+        "date,category,description,amount\n2024-03-01,Food,A,0.10\n2024-03-02,Food,B,0.20\n"
+    )
+    budget_csv = "category,limit\nFood,0.10\n"
+
+    _, _, month_category_totals, errors = import_expenses(expense_csv)
+    assert errors == []
+    budgets = parse_budgets_csv(budget_csv)
+
+    alerts = compute_budget_alerts(month_category_totals, budgets)
+
+    assert len(alerts) == 1
+    assert alerts[0]["amount_over"] == Decimal("0.20")
+    assert isinstance(alerts[0]["amount_over"], Decimal)

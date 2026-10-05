@@ -5,17 +5,28 @@ from __future__ import annotations
 import csv
 import re
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 _DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_TWO_PLACES = Decimal("0.01")
+_ZERO = Decimal("0")
+
+
+def money_to_json_string(value: Decimal) -> str:
+    return str(value.quantize(_TWO_PLACES, rounding=ROUND_HALF_UP))
 
 
 def import_expenses(
     csv_text: str,
-) -> tuple[dict[str, float], dict[str, float], dict[str, dict[str, float]], list[dict]]:
-    category_totals: dict[str, float] = {}
-    month_totals: dict[str, float] = {}
-    month_category_totals: dict[str, dict[str, float]] = {}
+) -> tuple[
+    dict[str, Decimal],
+    dict[str, Decimal],
+    dict[str, dict[str, Decimal]],
+    list[dict],
+]:
+    category_totals: dict[str, Decimal] = {}
+    month_totals: dict[str, Decimal] = {}
+    month_category_totals: dict[str, dict[str, Decimal]] = {}
     errors: list[dict] = []
 
     lines = csv_text.splitlines()
@@ -50,25 +61,25 @@ def import_expenses(
             errors.append({"line": line_num, "reason": "invalid amount"})
             continue
 
-        category_totals[category] = category_totals.get(category, 0.0) + amount
+        category_totals[category] = category_totals.get(category, _ZERO) + amount
         month_key = date_s[:7]
-        month_totals[month_key] = month_totals.get(month_key, 0.0) + amount
+        month_totals[month_key] = month_totals.get(month_key, _ZERO) + amount
         month_cats = month_category_totals.setdefault(month_key, {})
-        month_cats[category] = month_cats.get(category, 0.0) + amount
+        month_cats[category] = month_cats.get(category, _ZERO) + amount
 
     return category_totals, month_totals, month_category_totals, errors
 
 
 def compute_budget_alerts(
-    month_category_totals: dict[str, dict[str, float]],
-    budgets: dict[str, float],
+    month_category_totals: dict[str, dict[str, Decimal | float]],
+    budgets: dict[str, Decimal | float],
 ) -> list[dict]:
     alerts: list[dict] = []
     for month in sorted(month_category_totals):
         cats = month_category_totals[month]
         for category in sorted(budgets):
-            total = cats.get(category, 0.0)
-            limit = budgets[category]
+            total = _coerce_decimal(cats.get(category, _ZERO))
+            limit = _coerce_decimal(budgets[category])
             if total > limit:
                 alerts.append(
                     {
@@ -82,7 +93,7 @@ def compute_budget_alerts(
     return alerts
 
 
-def parse_budgets_csv(csv_text: str) -> dict[str, float]:
+def parse_budgets_csv(csv_text: str) -> dict[str, Decimal]:
     lines = csv_text.splitlines()
     if not lines:
         return {}
@@ -93,7 +104,7 @@ def parse_budgets_csv(csv_text: str) -> dict[str, float]:
         msg = "missing required header columns"
         raise ValueError(msg)
 
-    budgets: dict[str, float] = {}
+    budgets: dict[str, Decimal] = {}
     for line in lines[1:]:
         if not line.strip():
             continue
@@ -116,6 +127,12 @@ def parse_budgets_csv(csv_text: str) -> dict[str, float]:
     return budgets
 
 
+def _coerce_decimal(value: Decimal | float | int) -> Decimal:
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
 def _is_valid_date(date_s: str) -> bool:
     if not _DATE_PATTERN.match(date_s):
         return False
@@ -126,11 +143,11 @@ def _is_valid_date(date_s: str) -> bool:
     return True
 
 
-def _parse_positive_amount(amount_s: str) -> float | None:
+def _parse_positive_amount(amount_s: str) -> Decimal | None:
     try:
         value = Decimal(amount_s)
     except InvalidOperation:
         return None
     if value <= 0:
         return None
-    return float(value)
+    return value
