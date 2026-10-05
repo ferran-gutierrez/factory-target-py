@@ -753,9 +753,7 @@ def test_py_20261005_7jft_REQ_6_top_accepts_arbitrarily_long_positive_integer(
     result = _run_expenses_module(str(csv_path), "--top", "9" * 5000)
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "Food", "total": "8.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
 
 
 def test_REQ_7_without_top_preserves_existing_json_output(tmp_path: Path):
