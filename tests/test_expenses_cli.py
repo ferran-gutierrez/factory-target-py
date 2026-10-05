@@ -73,9 +73,7 @@ def test_REQ_1_cli_format_json_is_default_and_explicit_json_matches(tmp_path: Pa
 def test_REQ_2_cli_csv_outputs_plain_string_sorted_category_totals(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-05-01,apple,A,1.10\n"
-        "2024-05-02,Banana,B,2.20\n",
+        "date,category,description,amount\n2024-05-01,apple,A,1.10\n2024-05-02,Banana,B,2.20\n",
         encoding="utf-8",
     )
 
