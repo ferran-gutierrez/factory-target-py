@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
