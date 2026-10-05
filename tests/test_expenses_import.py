@@ -164,13 +164,49 @@ def test_valid_rows_aggregate_by_category_and_month():
     assert errors == []
     assert category_totals == {
         "Food": Decimal("15.50"),
-        "Travel": Decimal("100.00"),
-        "travel": Decimal("20.00"),
+        "Travel": Decimal("120.00"),
     }
     assert month_totals == {
         "2024-01": Decimal("35.50"),
         "2024-02": Decimal("100.00"),
     }
+    assert month_category_totals == {
+        "2024-01": {"Food": Decimal("15.50"), "Travel": Decimal("20.00")},
+        "2024-02": {"Travel": Decimal("100.00")},
+    }
+    _assert_all_totals_are_decimal(category_totals, month_totals, month_category_totals)
+
+
+def test_REQ_1_case_insensitive_categories_merge_under_first_row_spelling():
+    csv_text = (
+        "date,category,description,amount\n"
+        "2024-06-01, Food,Lunch,4.00\n"
+        "2024-06-02,FOOD ,Dinner,6.00\n"
+    )
+    category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
+    assert errors == []
+    assert set(category_totals.keys()) == {"Food"}
+    assert category_totals["Food"] == Decimal("10.00")
+    assert "FOOD" not in category_totals
+    assert month_category_totals["2024-06"] == {"Food": Decimal("10.00")}
+    assert month_totals["2024-06"] == Decimal("10.00")
+    _assert_all_totals_are_decimal(category_totals, month_totals, month_category_totals)
+
+
+def test_REQ_2_same_month_travel_variants_merge_under_first_canonical_key():
+    csv_text = (
+        "date,category,description,amount\n"
+        "2024-05-10,travel,Leg1,1.00\n"
+        "2024-05-11, Travel,Leg2,2.00\n"
+        "2024-05-12,TRAVEL,Leg3,3.00\n"
+    )
+    category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
+    assert errors == []
+    assert category_totals == {"travel": Decimal("6.00")}
+    assert "Travel" not in category_totals
+    assert "TRAVEL" not in category_totals
+    assert month_category_totals["2024-05"] == {"travel": Decimal("6.00")}
+    assert month_totals["2024-05"] == Decimal("6.00")
     _assert_all_totals_are_decimal(category_totals, month_totals, month_category_totals)
 
 
