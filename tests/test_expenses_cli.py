@@ -625,7 +625,9 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
 def test_REQ_1_no_top_flag_omits_top_categories_key(tmp_path: Path):
     expenses_path = tmp_path / "expenses.csv"
     expenses_path.write_text(
-        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-06-01,Food,Dinner,4.00\n",
         encoding="utf-8",
     )
     budgets_path = tmp_path / "budgets.csv"
@@ -651,6 +653,35 @@ def test_REQ_1_no_top_flag_omits_top_categories_key(tmp_path: Path):
         "budget_alerts",
     }
     assert "top_categories" not in budgets_payload
+
+    with_month = _run_expenses_module(str(expenses_path), "--month", "2024-05")
+    assert with_month.returncode == 0, with_month.stderr
+    month_payload = json.loads(with_month.stdout)
+    assert set(month_payload.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "month",
+    }
+    assert "top_categories" not in month_payload
+
+    with_month_and_budgets = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+    assert with_month_and_budgets.returncode == 0, with_month_and_budgets.stderr
+    month_budgets_payload = json.loads(with_month_and_budgets.stdout)
+    assert set(month_budgets_payload.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "budget_alerts",
+        "month",
+    }
+    assert "top_categories" not in month_budgets_payload
 
 
 def test_REQ_2_top_flag_adds_top_categories_with_two_decimal_totals(tmp_path: Path):
