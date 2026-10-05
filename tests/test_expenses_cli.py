@@ -664,9 +664,7 @@ def test_REQ_4_and_REQ_5_csv_filters_month_and_reports_all_errors(tmp_path: Path
         encoding="utf-8",
     )
 
-    result = _run_expenses_module(
-        str(csv_path), "--format", "csv", "--month", "2024-05"
-    )
+    result = _run_expenses_module(str(csv_path), "--format", "csv", "--month", "2024-05")
 
     assert result.returncode == 0
     assert result.stdout == "category,total\nFood,1.00\n"
