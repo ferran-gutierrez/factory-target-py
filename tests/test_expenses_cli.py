@@ -722,9 +722,7 @@ def test_REQ_2_format_json_matches_default_with_month_budgets_and_errors(tmp_pat
     assert json_result.returncode == 0
     assert json_result.stdout == default_result.stdout
     assert json_result.stderr == default_result.stderr
-    assert json.loads(json_result.stdout)["errors"] == [
-        {"line": 4, "reason": "empty description"}
-    ]
+    assert json.loads(json_result.stdout)["errors"] == [{"line": 4, "reason": "empty description"}]
 
 
 def test_REQ_7_csv_with_month_and_budgets_supports_both_option_orders(tmp_path: Path):
