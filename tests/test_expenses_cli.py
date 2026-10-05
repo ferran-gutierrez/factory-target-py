@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -620,3 +622,218 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_py_20261005_fq5u_REQ_1_default_format_prints_json_like_before(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path))
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert set(payload.keys()) == {"category_totals", "month_totals", "errors"}
+    assert payload["category_totals"] == {"Food": "12.00"}
+    assert payload["month_totals"] == {"2024-05": "12.00"}
+    assert payload["errors"] == []
+
+
+def test_py_20261005_fq5u_REQ_2_explicit_json_matches_omitted_format(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Travel,Flight,25.50\n",
+        encoding="utf-8",
+    )
+
+    without_flag = _run_expenses_module(str(csv_path))
+    with_json = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert without_flag.returncode == 0, without_flag.stderr
+    assert with_json.returncode == 0, with_json.stderr
+    assert json.loads(without_flag.stdout) == json.loads(with_json.stdout)
+
+
+def test_py_20261005_fq5u_REQ_3_csv_prints_sorted_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Travel,Flight,10.00\n"
+        "2024-05-02,Food,Meal,5.50\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Food,5.50",
+        "Travel,10.00",
+    ]
+
+
+def test_py_20261005_fq5u_REQ_4_csv_respects_month_filter(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv", "--month", "2024-04")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["category,total", "Food,7.00"]
+
+
+def test_py_20261005_fq5u_REQ_5_csv_validation_errors_on_stderr_not_json(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-15,Food,Ok,5.00\n"
+        "2024-04-01,,Bad category,7.00\n"
+        "2024-05-01,Travel,,9.00\n",
+        encoding="utf-8",
+    )
+
+    json_result = _run_expenses_module(str(csv_path), "--month", "2024-03")
+    csv_result = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-03",
+    )
+
+    assert json_result.returncode == 0, json_result.stderr
+    json_payload = json.loads(json_result.stdout)
+    assert csv_result.returncode == 0, csv_result.stderr
+    assert csv_result.stdout.splitlines() == ["category,total", "Food,5.00"]
+    assert csv_result.stderr.splitlines() == [
+        f"line {err['line']}: {err['reason']}" for err in json_payload["errors"]
+    ]
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(csv_result.stdout)
+
+
+def test_py_20261005_fq5u_REQ_6_csv_sorts_categories_by_plain_string_order(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,One,1.00\n"
+        "2024-05-02,Banana,Two,2.00\n"
+        "2024-05-03,APPLE,Three,3.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Banana,2.00",
+        "apple,4.00",
+    ]
+
+
+def test_py_20261005_fq5u_REQ_7_invalid_format_values_write_usage_and_exit_one():
+    csv_path_arg = "expenses.csv"
+    invalid_cases = (
+        ["--format", "xml"],
+        ["--format"],
+        ["--format", "json", "--format", "csv"],
+    )
+
+    for extra_args in invalid_cases:
+        result = _run_expenses_module(csv_path_arg, *extra_args)
+        assert result.returncode == 1, extra_args
+        assert "usage" in result.stderr.lower(), extra_args
+        assert result.stdout.strip() == "", extra_args
+
+
+def test_py_20261005_fq5u_REQ_8_format_and_month_order_independent(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    format_first = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-04",
+    )
+    month_first = _run_expenses_module(
+        str(csv_path),
+        "--month",
+        "2024-04",
+        "--format",
+        "csv",
+    )
+
+    assert format_first.returncode == 0, format_first.stderr
+    assert month_first.returncode == 0, month_first.stderr
+    assert format_first.stdout == month_first.stdout
+
+
+def test_py_20261005_fq5u_REQ_9_csv_with_budgets_stdout_is_category_totals_only(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,May,12.00\n2024-06-01,Food,June,20.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+    missing_budgets = tmp_path / "missing-budgets.csv"
+    bad_budgets = tmp_path / "bad-budgets.csv"
+    bad_budgets.write_text("category,limit\nFood,0\n", encoding="utf-8")
+
+    success = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+    assert success.returncode == 0, success.stderr
+    assert success.stdout.splitlines() == ["category,total", "Food,12.00"]
+    assert "budget" not in success.stdout.lower()
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(success.stdout)
+
+    unreadable_budget = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(missing_budgets),
+    )
+    assert unreadable_budget.returncode != 0
+    assert unreadable_budget.stderr.splitlines() == [str(missing_budgets)]
+    assert unreadable_budget.stdout.strip() == ""
+
+    invalid_budget = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(bad_budgets),
+        "--month",
+        "2024-05",
+    )
+    assert invalid_budget.returncode != 0
+    assert invalid_budget.stderr.strip() == "invalid limit"
+    assert invalid_budget.stdout.strip() == ""
+
+    invalid_month = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-13",
+    )
+    assert invalid_month.returncode != 0
+    assert "usage" in invalid_month.stderr.lower()
+    assert invalid_month.stdout.strip() == ""
