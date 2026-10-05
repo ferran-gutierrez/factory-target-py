@@ -620,3 +620,297 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_REQ_1_default_json_stdout_matches_pre_format_task_shape(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-15,Food,March meal,5.00\n"
+        "2024-04-01,Food,April meal,7.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,100.00\n", encoding="utf-8")
+
+    result = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-04",
+        "--budgets",
+        str(budgets_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "category_totals": {"Food": "7.00"},
+        "month_totals": {"2024-04": "7.00"},
+        "errors": [],
+        "month": "2024-04",
+        "budget_alerts": [],
+    }
+
+
+def test_REQ_2_explicit_json_format_matches_omitted_format(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Travel,Flight,4.00\n",
+        encoding="utf-8",
+    )
+
+    omitted = _run_expenses_module(str(csv_path))
+    explicit = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert omitted.returncode == 0, omitted.stderr
+    assert explicit.returncode == 0, explicit.stderr
+    assert explicit.stdout == omitted.stdout
+
+
+def test_REQ_3_csv_stdout_header_and_case_sensitive_category_order(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,food,Lunch,8.00\n"
+        "2024-05-02,Travel,Flight,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Travel,4.00",
+        "food,8.00",
+    ]
+
+
+def test_REQ_4_csv_totals_match_json_category_total_strings(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-03-01,Food,A,0.10\n2024-03-02,Food,B,0.20\n",
+        encoding="utf-8",
+    )
+
+    json_result = _run_expenses_module(str(csv_path), "--format", "json")
+    csv_result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert json_result.returncode == 0, json_result.stderr
+    assert csv_result.returncode == 0, csv_result.stderr
+    category_totals = json.loads(json_result.stdout)["category_totals"]
+    sorted_categories = sorted(category_totals.keys())
+    data_lines = csv_result.stdout.strip().splitlines()[1:]
+    assert data_lines == [
+        f"{category},{category_totals[category]}" for category in sorted_categories
+    ]
+
+
+def test_REQ_5_csv_with_month_reflects_filtered_category_totals(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    json_result = _run_expenses_module(str(csv_path), "--month", "2024-04", "--format", "json")
+    csv_result = _run_expenses_module(str(csv_path), "--month", "2024-04", "--format", "csv")
+
+    assert json_result.returncode == 0, json_result.stderr
+    assert csv_result.returncode == 0, csv_result.stderr
+    assert json.loads(json_result.stdout)["category_totals"] == {"Food": "7.00"}
+    assert csv_result.stdout.splitlines() == [
+        "category,total",
+        "Food,7.00",
+    ]
+
+
+def test_REQ_6_csv_invalid_rows_on_stderr_valid_rows_on_stdout(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-15,Food,Ok,5.00\n"
+        "2024-04-01,,Bad category,7.00\n"
+        "2024-05-01,Travel,,9.00\n",
+        encoding="utf-8",
+    )
+
+    json_result = _run_expenses_module(str(csv_path), "--format", "json")
+    csv_result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert json_result.returncode == 0, json_result.stderr
+    assert csv_result.returncode == 0, csv_result.stderr
+    errors = json.loads(json_result.stdout)["errors"]
+    assert csv_result.stderr.splitlines() == [
+        f"line {err['line']}: {err['reason']}" for err in errors
+    ]
+    assert csv_result.stdout.splitlines() == [
+        "category,total",
+        "Food,5.00",
+        "Travel,9.00",
+    ]
+    assert "{" not in csv_result.stdout
+
+
+def test_REQ_7_csv_sorts_uppercase_before_lowercase_on_category_keys(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,Snack,1.00\n"
+        "2024-05-02,Banana,Snack,2.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    categories = [line.split(",", 1)[0] for line in result.stdout.strip().splitlines()[1:]]
+    assert categories == ["Banana", "apple"]
+
+
+def test_REQ_8_invalid_format_values_write_usage_empty_stdout_exit_one(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    last_token = _run_expenses_module(str(csv_path), "--format")
+    empty_value = _run_expenses_module(str(csv_path), "--format", "--month")
+    unsupported = _run_expenses_module(str(csv_path), "--format", "xml")
+
+    for result in (last_token, empty_value, unsupported):
+        assert result.returncode == 1, result.stderr
+        assert "usage" in result.stderr.lower()
+        assert result.stdout.strip() == ""
+
+
+def test_REQ_9_format_flag_ordering_and_duplicate_flags_rejected(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,May,12.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    format_first = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+    format_last = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+        "--month",
+        "2024-05",
+        "--format",
+        "csv",
+    )
+
+    assert format_first.returncode == 0, format_first.stderr
+    assert format_last.returncode == 0, format_last.stderr
+    assert format_first.stdout == format_last.stdout
+    assert format_first.stdout.splitlines() == ["category,total", "Food,12.00"]
+
+    duplicate_format = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--format",
+        "json",
+    )
+    duplicate_month = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+        "--month",
+        "2024-05",
+    )
+    duplicate_budgets = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(budgets_path),
+        "--budgets",
+        str(budgets_path),
+    )
+
+    for result in (duplicate_format, duplicate_month, duplicate_budgets):
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout.strip() == ""
+
+
+def test_REQ_10_csv_with_budgets_matches_json_error_and_success_rules(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+    missing_expenses = tmp_path / "missing-expenses.csv"
+    missing_budgets = tmp_path / "missing-budgets.csv"
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+    bad_budgets = tmp_path / "bad-budgets.csv"
+    bad_budgets.write_text("category,limit\nFood,0\n", encoding="utf-8")
+
+    success = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(budgets_path),
+    )
+    assert success.returncode == 0, success.stderr
+    assert success.stdout.splitlines() == ["category,total", "Food,8.00"]
+    assert "budget" not in success.stdout.lower()
+    assert success.stderr.strip() == ""
+
+    unreadable_expense = _run_expenses_module(
+        str(missing_expenses),
+        "--format",
+        "csv",
+        "--budgets",
+        str(budgets_path),
+    )
+    assert unreadable_expense.returncode != 0
+    assert unreadable_expense.stderr.splitlines() == [str(missing_expenses)]
+    assert unreadable_expense.stdout.strip() == ""
+
+    unreadable_budget = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(missing_budgets),
+    )
+    assert unreadable_budget.returncode != 0
+    assert unreadable_budget.stderr.splitlines() == [str(missing_budgets)]
+    assert unreadable_budget.stdout.strip() == ""
+
+    invalid_budget = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(bad_budgets),
+    )
+    assert invalid_budget.returncode != 0
+    assert invalid_budget.stderr.strip() == "invalid limit"
+    assert invalid_budget.stdout.strip() == ""
+
+    invalid_month = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-13",
+        "--budgets",
+        str(budgets_path),
+    )
+    assert invalid_month.returncode != 0
+    assert "usage" in invalid_month.stderr.lower()
+    assert invalid_month.stdout.strip() == ""
