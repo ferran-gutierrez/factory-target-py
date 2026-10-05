@@ -55,6 +55,87 @@ def test_cli_json_error_objects_use_line_and_reason_keys(tmp_path: Path):
     assert payload["errors"][0]["reason"] == "empty category"
 
 
+def test_REQ_1_cli_format_json_is_default_and_explicit_json_matches(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    default_result = _run_expenses_module(str(csv_path))
+    explicit_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == 0
+    assert explicit_result.returncode == 0
+    assert json.loads(default_result.stdout) == json.loads(explicit_result.stdout)
+
+
+def test_REQ_2_cli_csv_outputs_plain_string_sorted_category_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,A,1.10\n"
+        "2024-05-02,Banana,B,2.20\n"
+        "2024-05-03,Apple,C,3.30\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "category,total\nApple,3.30\nBanana,2.20\napple,1.10\n"
+    assert result.stderr == ""
+
+
+def test_REQ_3_cli_csv_applies_month_filter_in_either_flag_order(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-04-01,Food,April,2.00\n"
+        "2024-05-01,Food,May,3.00\n",
+        encoding="utf-8",
+    )
+
+    month_first = _run_expenses_module(
+        str(csv_path), "--month", "2024-05", "--format", "csv"
+    )
+    format_first = _run_expenses_module(
+        str(csv_path), "--format", "csv", "--month", "2024-05"
+    )
+
+    assert month_first.returncode == 0
+    assert format_first.returncode == 0
+    assert month_first.stdout == "category,total\nFood,3.00\n"
+    assert format_first.stdout == month_first.stdout
+
+
+def test_REQ_4_cli_csv_reports_errors_on_stderr_without_json(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,,Missing category,3.00\n"
+        "2024-05-02,Food,Valid,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0
+    assert result.stdout == "category,total\nFood,4.00\n"
+    assert result.stderr == "line 2: empty category\n"
+
+
+def test_REQ_6_cli_invalid_or_missing_format_writes_usage_and_nothing_else(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text("date,category,description,amount\n", encoding="utf-8")
+
+    for format_args in (("--format",), ("--format", "xml")):
+        result = _run_expenses_module(str(csv_path), *format_args)
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
+
+
 def test_cli_wrong_argument_count_writes_usage_to_stderr_and_exits_nonzero():
     no_args = _run_expenses_module()
     assert no_args.returncode != 0
