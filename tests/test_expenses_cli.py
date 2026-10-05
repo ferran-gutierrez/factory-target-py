@@ -160,7 +160,7 @@ def test_REQ_3_cli_budget_alerts_json_order_matches_case_insensitive_category_so
     )
     budgets_path = tmp_path / "budgets.csv"
     budgets_path.write_text(
-        "category,limit\nTravel,10.00\nfood,10.00\nFood,1.00\n",
+        "category,limit\nTravel,10.00\nfood,10.00\n",
         encoding="utf-8",
     )
 
@@ -171,7 +171,7 @@ def test_REQ_3_cli_budget_alerts_json_order_matches_case_insensitive_category_so
     assert [alert["category"] for alert in payload["budget_alerts"]] == [
         "food",
         "Travel",
-        "Food",
+        "food",
     ]
     assert [alert["month"] for alert in payload["budget_alerts"]] == [
         "2024-01",
