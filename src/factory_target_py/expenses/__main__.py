@@ -37,7 +37,7 @@ def _is_valid_month(month: str) -> bool:
     return True
 
 
-def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | None]:
+def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, str | None]:
     usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
 
     def fail() -> None:
@@ -51,7 +51,7 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
     rest = argv[1:]
     month_filter: str | None = None
     budgets_path: Path | None = None
-    top_count: int | None = None
+    top_count: str | None = None
     index = 0
     while index < len(rest):
         token = rest[index]
@@ -79,13 +79,9 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | No
             top_value = rest[index + 1]
             if not _TOP_PATTERN.fullmatch(top_value):
                 fail()
-            try:
-                parsed_top = int(top_value)
-            except ValueError:
+            if not top_value.strip("0"):
                 fail()
-            if parsed_top <= 0:
-                fail()
-            top_count = parsed_top
+            top_count = top_value
             index += 2
             continue
         fail()
@@ -116,15 +112,23 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
 
 
 def _top_categories_to_json(
-    category_totals: dict[str, Decimal], count: int
+    category_totals: dict[str, Decimal], count: str
 ) -> list[dict[str, str]]:
     ranked = sorted(
         category_totals.items(),
         key=lambda item: (-item[1], item[0]),
     )
+    normalized_count = count.lstrip("0")
+    if len(normalized_count) > len(str(len(ranked))) or (
+        len(normalized_count) == len(str(len(ranked)))
+        and normalized_count >= str(len(ranked))
+    ):
+        selected = ranked
+    else:
+        selected = ranked[: int(normalized_count)]
     return [
         {"category": category, "total": money_to_json_string(total)}
-        for category, total in ranked[:count]
+        for category, total in selected
     ]
 
 

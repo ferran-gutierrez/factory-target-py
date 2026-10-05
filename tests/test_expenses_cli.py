@@ -696,3 +696,47 @@ def test_REQ_2_and_REQ_6_top_categories_follow_month_and_allow_large_n(
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["top_categories"] == [{"category": "Food", "total": "8.00"}]
+
+
+def test_REQ_6_top_categories_is_empty_when_there_are_no_categories(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text("date,category,description,amount\n", encoding="utf-8")
+
+    result = _run_expenses_module(str(csv_path), "--top", "1")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == []
+
+
+def test_REQ_8_top_categories_works_with_budgets_in_either_flag_order(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,12.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    top_first = _run_expenses_module(
+        str(expenses_path),
+        "--top",
+        "1",
+        "--budgets",
+        str(budgets_path),
+    )
+    budgets_first = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+        "--top",
+        "1",
+    )
+
+    assert top_first.returncode == 0, top_first.stderr
+    assert budgets_first.returncode == 0, budgets_first.stderr
+    assert json.loads(top_first.stdout) == json.loads(budgets_first.stdout)
+    assert json.loads(top_first.stdout)["top_categories"] == [
+        {"category": "Food", "total": "12.00"}
+    ]
