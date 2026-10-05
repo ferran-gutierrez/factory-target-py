@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
-from tests.test_expenses_cli import _run_expenses_module
+
+def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "factory_target_py.expenses", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def test_REQ_2_csv_stdout_category_totals_header_and_sorted_rows(tmp_path: Path):
