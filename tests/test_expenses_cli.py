@@ -633,16 +633,47 @@ def test_py_20261005_iyxt_REQ_1_without_top_omits_top_categories_key(tmp_path: P
     budgets_path = tmp_path / "budgets.csv"
     budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
 
+    expected_plain = {
+        "category_totals": {"Food": "12.00"},
+        "month_totals": {"2024-05": "12.00"},
+        "errors": [],
+    }
+
     plain = _run_expenses_module(str(expenses_path))
     assert plain.returncode == 0, plain.stderr
     payload_plain = json.loads(plain.stdout)
     assert "top_categories" not in payload_plain
-    assert set(payload_plain.keys()) == {"category_totals", "month_totals", "errors"}
+    assert payload_plain == expected_plain
+
+    expected_with_month = {
+        **expected_plain,
+        "month": "2024-05",
+    }
 
     with_month = _run_expenses_module(str(expenses_path), "--month", "2024-05")
     assert with_month.returncode == 0, with_month.stderr
     payload_month = json.loads(with_month.stdout)
     assert "top_categories" not in payload_month
+    assert set(payload_month.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "month",
+    }
+    assert payload_month == expected_with_month
+
+    expected_with_budgets = {
+        **expected_plain,
+        "budget_alerts": [
+            {
+                "month": "2024-05",
+                "category": "Food",
+                "total": "12.00",
+                "limit": "10.00",
+                "amount_over": "2.00",
+            }
+        ],
+    }
 
     with_budgets = _run_expenses_module(
         str(expenses_path),
@@ -652,15 +683,13 @@ def test_py_20261005_iyxt_REQ_1_without_top_omits_top_categories_key(tmp_path: P
     assert with_budgets.returncode == 0, with_budgets.stderr
     payload_budgets = json.loads(with_budgets.stdout)
     assert "top_categories" not in payload_budgets
-    assert payload_budgets["budget_alerts"] == [
-        {
-            "month": "2024-05",
-            "category": "Food",
-            "total": "12.00",
-            "limit": "10.00",
-            "amount_over": "2.00",
-        }
-    ]
+    assert set(payload_budgets.keys()) == {
+        "category_totals",
+        "month_totals",
+        "errors",
+        "budget_alerts",
+    }
+    assert payload_budgets == expected_with_budgets
 
 
 def test_py_20261005_iyxt_REQ_2_top_n_adds_top_categories_with_correct_format(
@@ -671,7 +700,8 @@ def test_py_20261005_iyxt_REQ_2_top_n_adds_top_categories_with_correct_format(
         "date,category,description,amount\n"
         "2024-05-01,Food,Lunch,8.00\n"
         "2024-05-02,Travel,Flight,20.00\n"
-        "2024-05-03,Food,Dinner,4.00\n",
+        "2024-05-03,Food,Dinner,4.00\n"
+        "2024-05-04,Fun,Game,3.00\n",
         encoding="utf-8",
     )
 
@@ -679,7 +709,15 @@ def test_py_20261005_iyxt_REQ_2_top_n_adds_top_categories_with_correct_format(
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    assert "top_categories" in payload
+    assert payload["category_totals"] == {
+        "Food": "12.00",
+        "Travel": "20.00",
+        "Fun": "3.00",
+    }
+    assert payload["top_categories"] == [
+        {"category": "Travel", "total": "20.00"},
+        {"category": "Food", "total": "12.00"},
+    ]
     assert len(payload["top_categories"]) == 2
     for entry in payload["top_categories"]:
         assert set(entry.keys()) == {"category", "total"}
