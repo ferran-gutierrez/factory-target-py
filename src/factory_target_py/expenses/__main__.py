@@ -41,7 +41,7 @@ def _usage_for_argv(argv: list[str]) -> str:
 
 
 def _parse_top_limit(value: str) -> int | None:
-    if not value.isdecimal():
+    if not value.isascii() or not value.isdecimal():
         return None
     parsed = int(value)
     if parsed <= 0:

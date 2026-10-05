@@ -797,18 +797,38 @@ def test_REQ_8_month_budgets_and_top_flags_any_order(tmp_path: Path):
     assert json.loads(order_a.stdout) == json.loads(order_b.stdout)
 
 
-def test_REQ_9_leading_zero_top_value_is_valid(tmp_path: Path):
+def test_REQ_9_top_argument_valid_only_ascii_decimal_positive_integer(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Travel,Flight,20.00\n",
         encoding="utf-8",
     )
 
-    result = _run_expenses_module(str(csv_path), "--top", "01")
+    for valid_value in ("1", "10", "01"):
+        result = _run_expenses_module(str(csv_path), "--top", valid_value)
+        assert result.returncode == 0, (valid_value, result.stderr)
+        payload = json.loads(result.stdout)
+        assert "top_categories" in payload, valid_value
+        assert len(payload["top_categories"]) <= int(valid_value), valid_value
 
-    assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
-    assert payload["top_categories"] == [{"category": "Food", "total": "8.00"}]
+    invalid_values = (
+        "0",
+        "-1",
+        "1.5",
+        "abc",
+        "",
+        "+1",
+        " 1",
+        "1 ",
+        "\u0661",
+    )
+    for invalid_value in invalid_values:
+        result = _run_expenses_module(str(csv_path), "--top", invalid_value)
+        assert result.returncode == 1, invalid_value
+        assert "--top" in result.stderr.lower(), invalid_value
+        assert result.stdout.strip() == "", invalid_value
 
 
 def test_top_categories_tie_break_uses_plain_string_order(tmp_path: Path):
