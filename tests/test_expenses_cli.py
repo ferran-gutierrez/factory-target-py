@@ -258,6 +258,69 @@ def test_REQ_6_cli_month_flag_unreadable_paths_and_invalid_budgets_stderr(tmp_pa
     assert invalid_budget.stdout.strip() == ""
 
 
+def test_REQ_2_cli_csv_outputs_case_sensitive_category_order(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,Lower,1.00\n"
+        "2024-05-02,Banana,Upper,2.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "category,total\nBanana,2.00\napple,1.00\n"
+    assert result.stderr == ""
+
+
+def test_REQ_3_cli_csv_applies_month_filter(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-04-01,Food,April,3.00\n"
+        "2024-05-01,Food,May,7.00\n"
+        "2024-05-02,Travel,Trip,2.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv", "--month", "2024-05")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "category,total\nFood,7.00\nTravel,2.00\n"
+
+
+def test_REQ_4_cli_csv_reports_invalid_rows_on_stderr(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Valid,3.00\n"
+        "2024-05-02,,Missing category,4.00\n"
+        "2024-05-03,Food,Invalid amount,nope\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0
+    assert result.stdout == "category,total\nFood,3.00\n"
+    assert result.stderr == "line 3: empty category\nline 4: invalid amount\n"
+
+
+def test_REQ_6_cli_missing_or_invalid_format_writes_usage(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Valid,3.00\n",
+        encoding="utf-8",
+    )
+
+    for format_args in (("--format",), ("--format", "xml")):
+        result = _run_expenses_module(str(csv_path), *format_args)
+        assert result.returncode == 1
+        assert "usage" in result.stderr.lower()
+        assert result.stdout == ""
+
+
 def test_cli_prints_two_decimal_strings_for_fraction_category_total(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(

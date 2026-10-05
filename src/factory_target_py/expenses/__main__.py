@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import csv
+import io
 import re
 import sys
 from datetime import datetime
@@ -17,10 +19,9 @@ from factory_target_py.expenses import (
 )
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
-_USAGE_LEGACY = "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>]"
-_USAGE_WITH_MONTH = (
+_USAGE = (
     "usage: python -m factory_target_py.expenses <csv-file> "
-    "[--month YYYY-MM] [--budgets <budgets-csv>]"
+    "[--format json|csv] [--month YYYY-MM] [--budgets <budgets-csv>]"
 )
 
 
@@ -34,11 +35,9 @@ def _is_valid_month(month: str) -> bool:
     return True
 
 
-def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
-    usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
-
+def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, str]:
     def fail() -> None:
-        print(usage, file=sys.stderr)
+        print(_USAGE, file=sys.stderr)
         raise SystemExit(1)
 
     if not argv:
@@ -48,6 +47,7 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
     rest = argv[1:]
     month_filter: str | None = None
     budgets_path: Path | None = None
+    output_format = "json"
     index = 0
     while index < len(rest):
         token = rest[index]
@@ -67,12 +67,20 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
             budgets_path = Path(rest[index + 1])
             index += 2
             continue
+        if token == "--format":
+            if index + 1 >= len(rest):
+                fail()
+            output_format = rest[index + 1]
+            if output_format not in {"json", "csv"}:
+                fail()
+            index += 2
+            continue
         fail()
 
     if month_filter is not None and not _is_valid_month(month_filter):
         fail()
 
-    return expense_path, month_filter, budgets_path
+    return expense_path, month_filter, budgets_path, output_format
 
 
 def _decimal_map_to_json(d: dict[str, Decimal]) -> dict[str, str]:
@@ -94,8 +102,17 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
     return result
 
 
+def _category_totals_to_csv(category_totals: dict[str, Decimal]) -> str:
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(["category", "total"])
+    for category in sorted(category_totals):
+        writer.writerow([category, money_to_json_string(category_totals[category])])
+    return output.getvalue()
+
+
 def main() -> None:
-    expense_path, month_filter, budgets_path = _parse_cli(sys.argv[1:])
+    expense_path, month_filter, budgets_path, output_format = _parse_cli(sys.argv[1:])
 
     try:
         csv_text = expense_path.read_text(encoding="utf-8")
@@ -112,15 +129,6 @@ def main() -> None:
         )
         month_category_totals = {month_filter: dict(category_totals)}
 
-    payload: dict = {
-        "category_totals": _decimal_map_to_json(category_totals),
-        "month_totals": _decimal_map_to_json(month_totals),
-        "errors": errors,
-    }
-
-    if month_filter is not None:
-        payload["month"] = month_filter
-
     if budgets_path is not None:
         try:
             budgets_text = budgets_path.read_text(encoding="utf-8")
@@ -132,10 +140,25 @@ def main() -> None:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
-        payload["budget_alerts"] = _alerts_to_json(
-            compute_budget_alerts(month_category_totals, budgets)
-        )
+        budget_alerts = compute_budget_alerts(month_category_totals, budgets)
+    else:
+        budget_alerts = []
 
+    if output_format == "csv":
+        print(_category_totals_to_csv(category_totals), end="")
+        for error in errors:
+            print(f"line {error['line']}: {error['reason']}", file=sys.stderr)
+        return
+
+    payload: dict = {
+        "category_totals": _decimal_map_to_json(category_totals),
+        "month_totals": _decimal_map_to_json(month_totals),
+        "errors": errors,
+    }
+    if month_filter is not None:
+        payload["month"] = month_filter
+    if budgets_path is not None:
+        payload["budget_alerts"] = _alerts_to_json(budget_alerts)
     print(json.dumps(payload))
 
 
