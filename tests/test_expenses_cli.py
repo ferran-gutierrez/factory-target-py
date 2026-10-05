@@ -729,7 +729,7 @@ def test_REQ_6_csv_invalid_rows_on_stderr_valid_rows_on_stdout(tmp_path: Path):
         "date,category,description,amount\n"
         "2024-03-15,Food,Ok,5.00\n"
         "2024-04-01,,Bad category,7.00\n"
-        "2024-05-01,Travel,,9.00\n",
+        "2024-05-01,Travel,Trip,9.00\n",
         encoding="utf-8",
     )
 
