@@ -122,9 +122,8 @@ def test_cli_unreadable_expense_file_exits_nonzero_with_traceback_on_stderr(tmp_
     result = _run_expenses_module(str(missing_expenses))
 
     assert result.returncode != 0
-    assert "Traceback (most recent call last)" in result.stderr
-    assert "FileNotFoundError" in result.stderr
-    assert str(missing_expenses) in result.stderr
+    assert result.stderr.splitlines() == [str(missing_expenses)]
+    assert "Traceback" not in result.stderr
     assert result.stdout.strip() == ""
 
 
@@ -143,8 +142,120 @@ def test_cli_unreadable_budgets_file_exits_nonzero_without_success_json(tmp_path
     )
 
     assert result.returncode != 0
-    assert result.stderr.strip() != ""
+    assert result.stderr.splitlines() == [str(missing_budgets)]
+    assert "Traceback" not in result.stderr
     assert result.stdout.strip() == ""
+
+
+def test_REQ_3_cli_budget_alerts_json_order_matches_case_insensitive_category_sort(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n"
+        "2024-01-01,food,Lunch,15.00\n"
+        "2024-01-02,Travel,Flight,15.00\n"
+        "2024-02-01,Food,Meal,50.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text(
+        "category,limit\nTravel,10.00\nfood,10.00\nFood,1.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(expenses_path), "--budgets", str(budgets_path))
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert [alert["category"] for alert in payload["budget_alerts"]] == [
+        "food",
+        "Travel",
+        "Food",
+    ]
+    assert [alert["month"] for alert in payload["budget_alerts"]] == [
+        "2024-01",
+        "2024-01",
+        "2024-02",
+    ]
+
+
+def test_REQ_4_cli_unreadable_expense_file_one_stderr_line_no_traceback(tmp_path: Path):
+    missing_expenses = tmp_path / "no-such-expenses.csv"
+
+    result = _run_expenses_module(str(missing_expenses))
+
+    assert result.returncode != 0
+    assert result.stderr.splitlines() == [str(missing_expenses)]
+    assert "Traceback" not in result.stderr
+    assert result.stdout.strip() == ""
+
+
+def test_REQ_5_cli_unreadable_budgets_file_one_stderr_line_no_traceback(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+    missing_budgets = tmp_path / "no-such-budgets.csv"
+
+    result = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(missing_budgets),
+    )
+
+    assert result.returncode != 0
+    assert result.stderr.splitlines() == [str(missing_budgets)]
+    assert "Traceback" not in result.stderr
+    assert result.stdout.strip() == ""
+
+
+def test_REQ_6_cli_month_flag_unreadable_paths_and_invalid_budgets_stderr(tmp_path: Path):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+    missing_expenses = tmp_path / "missing-expenses.csv"
+    missing_budgets = tmp_path / "missing-budgets.csv"
+    bad_budgets = tmp_path / "budgets.csv"
+    bad_budgets.write_text("category,limit\nFood,0\n", encoding="utf-8")
+
+    unreadable_expense = _run_expenses_module(
+        str(missing_expenses),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(bad_budgets),
+    )
+    assert unreadable_expense.returncode != 0
+    assert unreadable_expense.stderr.splitlines() == [str(missing_expenses)]
+    assert "Traceback" not in unreadable_expense.stderr
+    assert unreadable_expense.stdout.strip() == ""
+
+    unreadable_budget = _run_expenses_module(
+        str(expenses_path),
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(missing_budgets),
+    )
+    assert unreadable_budget.returncode != 0
+    assert unreadable_budget.stderr.splitlines() == [str(missing_budgets)]
+    assert "Traceback" not in unreadable_budget.stderr
+    assert unreadable_budget.stdout.strip() == ""
+
+    invalid_budget = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(bad_budgets),
+        "--month",
+        "2024-05",
+    )
+    assert invalid_budget.returncode != 0
+    assert invalid_budget.stderr.strip() == "invalid limit"
+    assert invalid_budget.stdout.strip() == ""
 
 
 def test_cli_prints_two_decimal_strings_for_fraction_category_total(tmp_path: Path):
@@ -483,9 +594,8 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
         "2024-05",
     )
     assert missing_expense.returncode != 0
-    assert "Traceback (most recent call last)" in missing_expense.stderr
-    assert "FileNotFoundError" in missing_expense.stderr
-    assert str(missing_expenses) in missing_expense.stderr
+    assert missing_expense.stderr.splitlines() == [str(missing_expenses)]
+    assert "Traceback" not in missing_expense.stderr
     assert missing_expense.stdout.strip() == ""
 
     missing_budget = _run_expenses_module(
@@ -496,7 +606,8 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
         str(missing_budgets),
     )
     assert missing_budget.returncode != 0
-    assert missing_budget.stderr.strip() != ""
+    assert missing_budget.stderr.splitlines() == [str(missing_budgets)]
+    assert "Traceback" not in missing_budget.stderr
     assert missing_budget.stdout.strip() == ""
 
     invalid_budget = _run_expenses_module(
@@ -507,5 +618,5 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
         "2024-05",
     )
     assert invalid_budget.returncode != 0
-    assert invalid_budget.stderr.strip() != ""
+    assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
