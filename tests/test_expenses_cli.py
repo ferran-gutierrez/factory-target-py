@@ -788,7 +788,7 @@ def test_py_20261005_fq5u_REQ_9_csv_with_budgets_stdout_is_category_totals_only(
     bad_budgets = tmp_path / "bad-budgets.csv"
     bad_budgets.write_text("category,limit\nFood,0\n", encoding="utf-8")
 
-    success = _run_expenses_module(
+    success_with_month = _run_expenses_module(
         str(expenses_path),
         "--format",
         "csv",
@@ -797,11 +797,58 @@ def test_py_20261005_fq5u_REQ_9_csv_with_budgets_stdout_is_category_totals_only(
         "--budgets",
         str(budgets_path),
     )
-    assert success.returncode == 0, success.stderr
-    assert success.stdout.splitlines() == ["category,total", "Food,12.00"]
-    assert "budget" not in success.stdout.lower()
+    assert success_with_month.returncode == 0, success_with_month.stderr
+    assert success_with_month.stdout.splitlines() == ["category,total", "Food,12.00"]
+    assert "budget" not in success_with_month.stdout.lower()
     with pytest.raises(json.JSONDecodeError):
-        json.loads(success.stdout)
+        json.loads(success_with_month.stdout)
+
+    success_budgets_only = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+        "--format",
+        "csv",
+    )
+    assert success_budgets_only.returncode == 0, success_budgets_only.stderr
+    assert success_budgets_only.stdout.splitlines() == [
+        "category,total",
+        "Food,32.00",
+    ]
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(success_budgets_only.stdout)
+
+    missing_expenses = tmp_path / "missing-expenses.csv"
+
+    unreadable_expense_csv = _run_expenses_module(
+        str(missing_expenses),
+        "--format",
+        "csv",
+    )
+    unreadable_expense_json = _run_expenses_module(str(missing_expenses))
+    assert unreadable_expense_csv.returncode != 0
+    assert unreadable_expense_csv.returncode == unreadable_expense_json.returncode
+    assert unreadable_expense_csv.stderr.splitlines() == [str(missing_expenses)]
+    assert unreadable_expense_csv.stderr == unreadable_expense_json.stderr
+    assert unreadable_expense_csv.stdout.strip() == ""
+
+    unreadable_expense_with_budgets = _run_expenses_module(
+        str(missing_expenses),
+        "--format",
+        "csv",
+        "--budgets",
+        str(budgets_path),
+    )
+    unreadable_expense_budgets_json = _run_expenses_module(
+        str(missing_expenses),
+        "--budgets",
+        str(budgets_path),
+    )
+    assert unreadable_expense_with_budgets.returncode != 0
+    assert unreadable_expense_with_budgets.returncode == unreadable_expense_budgets_json.returncode
+    assert unreadable_expense_with_budgets.stderr.splitlines() == [str(missing_expenses)]
+    assert unreadable_expense_with_budgets.stderr == unreadable_expense_budgets_json.stderr
+    assert unreadable_expense_with_budgets.stdout.strip() == ""
 
     unreadable_budget = _run_expenses_module(
         str(expenses_path),
