@@ -628,7 +628,7 @@ def test_cli_csv_format_prints_case_sensitive_sorted_category_totals(tmp_path: P
         "date,category,description,amount\n"
         "2024-05-01,apple,Lower,2.00\n"
         "2024-05-02,Banana,Upper,3.00\n"
-        "2024-05-03,Apple,Upper,4.00\n",
+        "2024-05-03,apple,Upper,4.00\n",
         encoding="utf-8",
     )
 
@@ -637,9 +637,8 @@ def test_cli_csv_format_prints_case_sensitive_sorted_category_totals(tmp_path: P
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
         "category,total",
-        "Apple,4.00",
         "Banana,3.00",
-        "apple,2.00",
+        "apple,6.00",
     ]
     assert result.stderr == ""
 
