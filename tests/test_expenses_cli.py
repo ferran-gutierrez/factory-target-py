@@ -741,6 +741,23 @@ def test_REQ_6_top_rejects_non_positive_decimal_integers(tmp_path: Path):
         assert result.stdout == "", top_value
 
 
+def test_py_20261005_7jft_REQ_6_top_accepts_arbitrarily_long_positive_integer(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "9" * 5000)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == [
+        {"category": "Food", "total": "8.00"}
+    ]
+
+
 def test_REQ_7_without_top_preserves_existing_json_output(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
