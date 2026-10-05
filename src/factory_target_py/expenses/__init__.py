@@ -150,6 +150,14 @@ def parse_budgets_csv(csv_text: str) -> dict[str, Decimal]:
     return budgets
 
 
+def compute_top_categories(category_totals: dict[str, Decimal], n: int) -> list[dict]:
+    ranked = sorted(
+        category_totals.items(),
+        key=lambda item: (-item[1], item[0].casefold()),
+    )
+    return [{"category": category, "total": total} for category, total in ranked[:n]]
+
+
 def _coerce_decimal(value: Decimal | float | int) -> Decimal:
     if isinstance(value, Decimal):
         return value
