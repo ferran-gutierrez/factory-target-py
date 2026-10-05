@@ -116,6 +116,18 @@ def test_cli_with_budgets_prints_budget_alerts_in_json(tmp_path: Path):
     assert all(isinstance(alert[key], str) for key in ("total", "limit", "amount_over"))
 
 
+def test_cli_unreadable_expense_file_exits_nonzero_with_traceback_on_stderr(tmp_path: Path):
+    missing_expenses = tmp_path / "missing-expenses.csv"
+
+    result = _run_expenses_module(str(missing_expenses))
+
+    assert result.returncode != 0
+    assert "Traceback (most recent call last)" in result.stderr
+    assert "FileNotFoundError" in result.stderr
+    assert str(missing_expenses) in result.stderr
+    assert result.stdout.strip() == ""
+
+
 def test_cli_unreadable_budgets_file_exits_nonzero_without_success_json(tmp_path: Path):
     expenses_path = tmp_path / "expenses.csv"
     expenses_path.write_text(
@@ -141,13 +153,16 @@ def test_cli_prints_two_decimal_strings_for_fraction_category_total(tmp_path: Pa
         "date,category,description,amount\n2024-03-01,Food,A,0.10\n2024-03-02,Food,B,0.20\n",
         encoding="utf-8",
     )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,100.00\n", encoding="utf-8")
 
-    result = _run_expenses_module(str(csv_path))
+    result = _run_expenses_module(str(csv_path), "--budgets", str(budgets_path))
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["category_totals"] == {"Food": "0.30"}
     assert payload["month_totals"] == {"2024-03": "0.30"}
+    assert payload["budget_alerts"] == []
 
 
 def test_cli_invalid_budgets_csv_exits_nonzero_without_success_json(tmp_path: Path):
