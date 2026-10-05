@@ -139,15 +139,22 @@ def test_REQ_7_invalid_format_writes_usage_and_exits_without_reading(tmp_path: P
         "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
         encoding="utf-8",
     )
+    missing_expenses = tmp_path / "missing-expenses.csv"
+    assert not missing_expenses.exists()
+
     for args in (
         (str(csv_path), "--format", "xml"),
         (str(csv_path), "--format", "JSON"),
         (str(csv_path), "--format"),
+        (str(missing_expenses), "--format", "xml"),
+        (str(missing_expenses), "--format"),
     ):
         result = _run_expenses_module(*args)
         assert result.returncode == 1, args
         assert "usage" in result.stderr.lower(), args
         assert result.stdout.strip() == "", args
+        if args[0] == str(missing_expenses):
+            assert str(missing_expenses) not in result.stderr, args
 
 
 def test_REQ_8_readable_file_exits_zero_for_csv_and_json_with_invalid_rows(tmp_path: Path):
