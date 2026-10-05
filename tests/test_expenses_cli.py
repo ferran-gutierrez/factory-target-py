@@ -680,9 +680,7 @@ def test_REQ_5_cli_without_top_flag_leaves_json_keys_unchanged(tmp_path: Path):
 def test_REQ_6_cli_month_and_top_rank_filtered_category_totals(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-03-01,Food,A,50.00\n"
-        "2024-04-01,Travel,B,100.00\n",
+        "date,category,description,amount\n2024-03-01,Food,A,50.00\n2024-04-01,Travel,B,100.00\n",
         encoding="utf-8",
     )
 
