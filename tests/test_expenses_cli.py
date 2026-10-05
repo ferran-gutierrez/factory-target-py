@@ -645,18 +645,14 @@ def test_REQ_1_to_REQ_3_cli_top_categories_orders_totals_and_ties(tmp_path: Path
 def test_REQ_4_cli_top_categories_follows_month_filter(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-05-01,May,One,8.00\n"
-        "2024-06-01,June,Two,9.00\n",
+        "date,category,description,amount\n2024-05-01,May,One,8.00\n2024-06-01,June,Two,9.00\n",
         encoding="utf-8",
     )
 
     result = _run_expenses_module(str(csv_path), "--top", "3", "--month", "2024-05")
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "May", "total": "8.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "May", "total": "8.00"}]
 
 
 def test_REQ_5_and_REQ_6_cli_top_categories_lists_all_or_none(tmp_path: Path):
@@ -672,9 +668,7 @@ def test_REQ_5_and_REQ_6_cli_top_categories_lists_all_or_none(tmp_path: Path):
         {"category": "Food", "total": "8.00"}
     ]
 
-    no_categories = _run_expenses_module(
-        str(csv_path), "--top", "2", "--month", "2024-01"
-    )
+    no_categories = _run_expenses_module(str(csv_path), "--top", "2", "--month", "2024-01")
     assert no_categories.returncode == 0, no_categories.stderr
     assert json.loads(no_categories.stdout)["top_categories"] == []
 
