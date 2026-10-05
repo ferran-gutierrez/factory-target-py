@@ -620,3 +620,87 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_REQ_1_to_REQ_3_cli_top_categories_orders_totals_and_ties(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,banana,One,5.00\n"
+        "2024-05-02,Apple,Two,5.00\n"
+        "2024-05-03,carrot,Three,9.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == [
+        {"category": "carrot", "total": "9.00"},
+        {"category": "Apple", "total": "5.00"},
+    ]
+
+
+def test_REQ_4_cli_top_categories_follows_month_filter(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,May,One,8.00\n"
+        "2024-06-01,June,Two,9.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "3", "--month", "2024-05")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["top_categories"] == [
+        {"category": "May", "total": "8.00"}
+    ]
+
+
+def test_REQ_5_and_REQ_6_cli_top_categories_lists_all_or_none(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,One,8.00\n",
+        encoding="utf-8",
+    )
+
+    all_categories = _run_expenses_module(str(csv_path), "--top", "10")
+    assert all_categories.returncode == 0, all_categories.stderr
+    assert json.loads(all_categories.stdout)["top_categories"] == [
+        {"category": "Food", "total": "8.00"}
+    ]
+
+    no_categories = _run_expenses_module(
+        str(csv_path), "--top", "2", "--month", "2024-01"
+    )
+    assert no_categories.returncode == 0, no_categories.stderr
+    assert json.loads(no_categories.stdout)["top_categories"] == []
+
+
+def test_REQ_7_cli_rejects_invalid_top_values(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,One,8.00\n",
+        encoding="utf-8",
+    )
+
+    for value in ("0", "-1", "1.5", "one"):
+        result = _run_expenses_module(str(csv_path), "--top", value)
+        assert result.returncode == 1, value
+        assert "--top" in result.stderr, value
+        assert result.stdout == "", value
+
+
+def test_REQ_8_cli_without_top_has_no_top_categories_field(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,One,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path))
+
+    assert result.returncode == 0, result.stderr
+    assert "top_categories" not in json.loads(result.stdout)
