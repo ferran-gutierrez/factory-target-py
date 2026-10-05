@@ -711,9 +711,7 @@ def test_REQ_3_top_categories_order_by_amount_desc_then_category_asc(tmp_path: P
 def test_REQ_4_top_categories_respect_month_filter(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-03-01,Food,A,5.00\n"
-        "2024-04-01,Travel,B,9.00\n",
+        "date,category,description,amount\n2024-03-01,Food,A,5.00\n2024-04-01,Travel,B,9.00\n",
         encoding="utf-8",
     )
 
@@ -748,9 +746,7 @@ def test_REQ_5_top_n_greater_than_category_count_lists_all_categories(tmp_path: 
 def test_REQ_6_empty_category_totals_yields_empty_top_categories(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n"
-        "2024-03-15,Food,Ok,5.00\n"
-        "2024-04-01,Travel,Other,7.00\n",
+        "date,category,description,amount\n2024-03-15,Food,Ok,5.00\n2024-04-01,Travel,Other,7.00\n",
         encoding="utf-8",
     )
 
