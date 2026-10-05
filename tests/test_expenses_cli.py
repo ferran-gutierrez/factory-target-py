@@ -620,3 +620,258 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def _csv_stdout_from_category_totals(category_totals: dict[str, str]) -> str:
+    lines = ["category,total"]
+    for category in sorted(category_totals.keys()):
+        lines.append(f"{category},{category_totals[category]}")
+    return "\n".join(lines) + "\n"
+
+
+def test_py_20261005_eegf_REQ_1_default_json_unchanged(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path))
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert set(payload.keys()) == {"category_totals", "month_totals", "errors"}
+    assert payload["category_totals"] == {"Food": "12.00"}
+    assert payload["month_totals"] == {"2024-05": "12.00"}
+    assert payload["errors"] == []
+
+
+def test_py_20261005_eegf_REQ_2_format_json_matches_default_without_format_flag(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-04-10,Travel,Flight,3.50\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nTravel,10.00\n", encoding="utf-8")
+
+    default_result = _run_expenses_module(str(csv_path), "--month", "2024-04")
+    json_result = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "json",
+        "--month",
+        "2024-04",
+    )
+
+    assert default_result.returncode == 0, default_result.stderr
+    assert json_result.returncode == 0, json_result.stderr
+    assert json_result.stdout == default_result.stdout
+    assert json.loads(json_result.stdout) == json.loads(default_result.stdout)
+
+
+def test_py_20261005_eegf_REQ_3_format_csv_category_totals_sorted_ascii(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-01-01,apple,One,1.00\n"
+        "2024-01-02,Travel,Two,2.00\n"
+        "2024-01-03,Food,Three,3.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    expected = _csv_stdout_from_category_totals({"Food": "3.00", "Travel": "2.00", "apple": "1.00"})
+    assert result.stdout == expected
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Food,3.00",
+        "Travel,2.00",
+        "apple,1.00",
+    ]
+
+
+def test_py_20261005_eegf_REQ_4_format_csv_case_sensitive_category_order(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-06-01,apple,Lower,2.00\n"
+        "2024-06-02,Banana,Upper,1.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[1:] == ["Banana,1.00", "apple,2.00"]
+    banana_index = result.stdout.index("Banana,1.00")
+    apple_index = result.stdout.index("apple,2.00")
+    assert banana_index < apple_index
+
+
+def test_py_20261005_eegf_REQ_5_format_csv_with_month_filters_totals(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-04",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "category,total\nFood,7.00\n"
+
+
+def test_py_20261005_eegf_REQ_6_format_csv_errors_on_stderr_not_stdout(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-15,Food,Ok,5.00\n"
+        "2024-04-01,,Bad category,7.00\n"
+        "2024-05-01,Travel,,9.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv", "--month", "2024-03")
+
+    assert result.returncode == 0, result.stderr
+    assert "{" not in result.stdout
+    assert result.stdout == "category,total\nFood,5.00\n"
+    assert result.stderr.splitlines() == [
+        "line 3: empty category",
+        "line 4: empty description",
+    ]
+
+
+def test_py_20261005_eegf_REQ_7_default_and_json_exit_zero_with_errors_in_json(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "bad.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,,Snack,3.00\n",
+        encoding="utf-8",
+    )
+
+    default_result = _run_expenses_module(str(csv_path))
+    json_result = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert default_result.returncode == 0
+    assert json_result.returncode == 0
+    for result in (default_result, json_result):
+        payload = json.loads(result.stdout)
+        assert payload["errors"] == [{"line": 2, "reason": "empty category"}]
+        assert payload["category_totals"] == {}
+
+
+def test_py_20261005_eegf_REQ_8_invalid_format_value_usage_stderr_exit_one(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "xml")
+
+    assert result.returncode == 1
+    assert "usage" in result.stderr.lower()
+    assert result.stdout.strip() == ""
+
+
+def test_py_20261005_eegf_REQ_9_format_flag_without_value_usage_stderr_exit_one(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format")
+
+    assert result.returncode == 1
+    assert "usage" in result.stderr.lower()
+    assert result.stdout.strip() == ""
+
+
+def test_py_20261005_eegf_REQ_10_format_flag_order_independent_with_month_and_budgets(
+    tmp_path: Path,
+):
+    expenses_path = tmp_path / "expenses.csv"
+    expenses_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,May,12.00\n2024-06-01,Food,June,20.00\n",
+        encoding="utf-8",
+    )
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nFood,10.00\n", encoding="utf-8")
+
+    json_a = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "json",
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+    json_b = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+        "--month",
+        "2024-05",
+        "--format",
+        "json",
+    )
+    csv_a = _run_expenses_module(
+        str(expenses_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+        "--budgets",
+        str(budgets_path),
+    )
+    csv_b = _run_expenses_module(
+        str(expenses_path),
+        "--budgets",
+        str(budgets_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-05",
+    )
+
+    assert json_a.returncode == 0, json_a.stderr
+    assert json_b.returncode == 0, json_b.stderr
+    assert json_a.stdout == json_b.stdout
+    assert json_a.stderr == json_b.stderr
+
+    assert csv_a.returncode == 0, csv_a.stderr
+    assert csv_b.returncode == 0, csv_b.stderr
+    assert csv_a.stdout == csv_b.stdout
+    assert csv_a.stderr == csv_b.stderr
+    assert csv_a.stdout == "category,total\nFood,12.00\n"
+
+
+def test_py_20261005_eegf_REQ_11_unreadable_expense_path_unchanged_with_format_flag(
+    tmp_path: Path,
+):
+    missing_expenses = tmp_path / "missing-expenses.csv"
+
+    for extra_args in ((), ("--format", "json"), ("--format", "csv")):
+        result = _run_expenses_module(str(missing_expenses), *extra_args)
+
+        assert result.returncode != 0, extra_args
+        assert result.stderr.splitlines() == [str(missing_expenses)], extra_args
+        assert "Traceback" not in result.stderr, extra_args
+        assert result.stdout.strip() == "", extra_args
