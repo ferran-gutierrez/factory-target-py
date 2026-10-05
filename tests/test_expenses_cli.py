@@ -620,3 +620,75 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def test_cli_top_categories_orders_ties_and_limits_results(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Banana,One,5.00\n"
+        "2024-05-02,apple,Two,5.00\n"
+        "2024-05-03,Carrot,Three,7.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == [
+        {"category": "Carrot", "total": "7.00"},
+        {"category": "Banana", "total": "5.00"},
+    ]
+
+
+def test_cli_top_categories_lists_all_categories_when_n_is_larger(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,4.00\n"
+        "2024-05-02,Travel,Train,2.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "10")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == [
+        {"category": "Food", "total": "4.00"},
+        {"category": "Travel", "total": "2.00"},
+    ]
+
+
+def test_cli_top_categories_uses_selected_month_totals(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,May,8.00\n"
+        "2024-06-01,Travel,June,12.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(
+        str(csv_path), "--top", "1", "--month", "2024-05"
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["top_categories"] == [{"category": "Food", "total": "8.00"}]
+
+
+def test_cli_invalid_top_value_writes_error_only_to_stderr(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,Food,Lunch,4.00\n",
+        encoding="utf-8",
+    )
+
+    for top_value in ("0", "-1", "1.5", "abc"):
+        result = _run_expenses_module(str(csv_path), "--top", top_value)
+
+        assert result.returncode == 1
+        assert "--top" in result.stderr
+        assert result.stdout == ""
