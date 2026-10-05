@@ -18,8 +18,7 @@ from factory_target_py.expenses import (
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 _USAGE_LEGACY = (
-    "usage: python -m factory_target_py.expenses <csv-file> "
-    "[--budgets <budgets-csv>] [--top N]"
+    "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>] [--top N]"
 )
 _USAGE_WITH_MONTH = (
     "usage: python -m factory_target_py.expenses <csv-file> "
@@ -47,11 +46,7 @@ def _parse_top_value(value: str) -> int:
 
 
 def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | None]:
-    usage = (
-        _USAGE_WITH_MONTH
-        if "--month" in argv or "--top" in argv
-        else _USAGE_LEGACY
-    )
+    usage = _USAGE_WITH_MONTH if "--month" in argv or "--top" in argv else _USAGE_LEGACY
 
     def fail() -> None:
         print(usage, file=sys.stderr)
