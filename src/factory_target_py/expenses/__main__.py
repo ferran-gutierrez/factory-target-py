@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sys
@@ -18,6 +17,11 @@ from factory_target_py.expenses import (
 )
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
+_USAGE_LEGACY = "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>]"
+_USAGE_WITH_MONTH = (
+    "usage: python -m factory_target_py.expenses <csv-file> "
+    "[--month YYYY-MM] [--budgets <budgets-csv>]"
+)
 
 
 def _is_valid_month(month: str) -> bool:
@@ -30,30 +34,45 @@ def _is_valid_month(month: str) -> bool:
     return True
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    return argparse.ArgumentParser(
-        prog="python -m factory_target_py.expenses",
-        usage=(
-            "usage: python -m factory_target_py.expenses <csv-file> "
-            "[--month YYYY-MM] [--budgets <budgets-csv>]"
-        ),
-    )
-
-
 def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
-    parser = _build_parser()
-    parser.add_argument("csv_file", type=Path)
-    parser.add_argument("--month", dest="month")
-    parser.add_argument("--budgets", dest="budgets", metavar="budgets-csv")
+    usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
 
-    args = parser.parse_args(argv)
-
-    if args.month is not None and not _is_valid_month(args.month):
-        parser.print_usage(file=sys.stderr)
+    def fail() -> None:
+        print(usage, file=sys.stderr)
         raise SystemExit(1)
 
-    budgets_path = Path(args.budgets) if args.budgets is not None else None
-    return args.csv_file, args.month, budgets_path
+    if not argv:
+        fail()
+
+    expense_path = Path(argv[0])
+    rest = argv[1:]
+    month_filter: str | None = None
+    budgets_path: Path | None = None
+    index = 0
+    while index < len(rest):
+        token = rest[index]
+        if token == "--month":
+            if month_filter is not None:
+                fail()
+            if index + 1 >= len(rest):
+                fail()
+            month_filter = rest[index + 1]
+            index += 2
+            continue
+        if token == "--budgets":
+            if budgets_path is not None:
+                fail()
+            if index + 1 >= len(rest):
+                fail()
+            budgets_path = Path(rest[index + 1])
+            index += 2
+            continue
+        fail()
+
+    if month_filter is not None and not _is_valid_month(month_filter):
+        fail()
+
+    return expense_path, month_filter, budgets_path
 
 
 def _decimal_map_to_json(d: dict[str, Decimal]) -> dict[str, str]:
