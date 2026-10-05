@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -620,3 +622,222 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def _basic_expenses_csv(tmp_path: Path) -> Path:
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
+        encoding="utf-8",
+    )
+    return csv_path
+
+
+def test_py_20261005_gpve_REQ_1_default_format_unchanged_json(tmp_path: Path):
+    csv_path = _basic_expenses_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path))
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert set(payload.keys()) == {"category_totals", "month_totals", "errors"}
+    assert payload["category_totals"] == {"Food": "12.00"}
+    assert payload["month_totals"] == {"2024-05": "12.00"}
+    assert payload["errors"] == []
+
+
+def test_py_20261005_gpve_REQ_2_explicit_json_matches_default(tmp_path: Path):
+    csv_path = _basic_expenses_csv(tmp_path)
+
+    without_flag = _run_expenses_module(str(csv_path))
+    with_json = _run_expenses_module(str(csv_path), "--format", "json")
+
+    assert without_flag.returncode == 0, without_flag.stderr
+    assert with_json.returncode == 0, with_json.stderr
+    assert without_flag.stdout == with_json.stdout
+    assert without_flag.stderr == with_json.stderr
+
+
+def test_py_20261005_gpve_REQ_3_csv_prints_category_totals_sorted_case_sensitive(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Travel,Flight,100.00\n"
+        "2024-05-02,Food,Meal,5.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Food,5.00",
+        "Travel,100.00",
+    ]
+    assert result.stderr == ""
+
+
+def test_py_20261005_gpve_REQ_4_csv_respects_month_filter(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv", "--month", "2024-04")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["category,total", "Food,7.00"]
+
+
+def test_py_20261005_gpve_REQ_5_csv_errors_on_stderr_not_json_stdout(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-03-15,Food,Ok,5.00\n"
+        "2024-04-01,,Bad category,7.00\n"
+        "2024-05-01,Travel,,9.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Food,5.00",
+    ]
+    assert result.stderr.splitlines() == [
+        "line 3: empty category",
+        "line 4: empty description",
+    ]
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(result.stdout)
+
+
+def test_py_20261005_gpve_REQ_6_csv_exit_zero_when_expense_file_read_despite_errors(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "bad.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,,Snack,3.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0
+    assert result.stderr.strip() == "line 2: empty category"
+
+
+def test_py_20261005_gpve_REQ_7_csv_orders_categories_by_plain_string_comparison(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,Item A,3.00\n"
+        "2024-05-02,Banana,Item B,5.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--format", "csv")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "category,total",
+        "Banana,5.00",
+        "apple,3.00",
+    ]
+
+
+def test_py_20261005_gpve_REQ_8_invalid_format_writes_usage_and_exits_nonzero(tmp_path: Path):
+    csv_path = _basic_expenses_csv(tmp_path)
+
+    missing_value = _run_expenses_module(str(csv_path), "--format")
+    assert missing_value.returncode == 1
+    assert "usage" in missing_value.stderr.lower()
+    assert missing_value.stdout.strip() == ""
+
+    bad_value = _run_expenses_module(str(csv_path), "--format", "xml")
+    assert bad_value.returncode == 1
+    assert "usage" in bad_value.stderr.lower()
+    assert bad_value.stdout.strip() == ""
+
+    duplicate_format = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "json",
+        "--format",
+        "csv",
+    )
+    assert duplicate_format.returncode == 1
+    assert "usage" in duplicate_format.stderr.lower()
+    assert duplicate_format.stdout.strip() == ""
+
+
+def test_py_20261005_gpve_REQ_9_format_month_flags_order_independent(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    month_first = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-04",
+    )
+    format_first = _run_expenses_module(
+        str(csv_path),
+        "--month",
+        "2024-04",
+        "--format",
+        "csv",
+    )
+
+    assert month_first.returncode == 0, month_first.stderr
+    assert format_first.returncode == 0, format_first.stderr
+    assert month_first.stdout == format_first.stdout
+    assert month_first.stderr == format_first.stderr
+
+
+def test_py_20261005_gpve_REQ_10_unreadable_expense_no_success_output_with_csv_format(
+    tmp_path: Path,
+):
+    missing = tmp_path / "missing.csv"
+
+    result = _run_expenses_module(str(missing), "--format", "csv")
+
+    assert result.returncode != 0
+    assert result.stderr.splitlines() == [str(missing)]
+    assert result.stdout.strip() == ""
+
+
+def test_py_20261005_gpve_csv_ignores_budgets_flag_after_successful_read(tmp_path: Path):
+    csv_path = _basic_expenses_csv(tmp_path)
+    missing_budgets = tmp_path / "missing-budgets.csv"
+
+    result = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--budgets",
+        str(missing_budgets),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["category,total", "Food,12.00"]
+    assert result.stderr == ""
+
+
+def test_py_20261005_gpve_csv_empty_month_yields_header_only(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(
+        str(csv_path),
+        "--format",
+        "csv",
+        "--month",
+        "2024-01",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["category,total"]
