@@ -609,9 +609,7 @@ def test_REQ_2_cli_top_categories_follows_month_filter(tmp_path: Path):
     result = _run_expenses_module(str(csv_path), "--top", "5", "--month", "2024-05")
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "Food", "total": "10.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "10.00"}]
 
 
 def test_REQ_3_cli_top_categories_sorts_ties_by_plain_category_name(tmp_path: Path):
@@ -646,9 +644,7 @@ def test_REQ_4_cli_top_categories_includes_all_categories_when_n_is_larger(
     result = _run_expenses_module(str(csv_path), "--top", "9")
 
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["top_categories"] == [
-        {"category": "Food", "total": "8.00"}
-    ]
+    assert json.loads(result.stdout)["top_categories"] == [{"category": "Food", "total": "8.00"}]
 
 
 def test_REQ_5_cli_rejects_invalid_top_values_without_stdout(tmp_path: Path):
