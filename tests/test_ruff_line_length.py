@@ -5,10 +5,11 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+RUFF_CONFIG_FRAGMENT = ROOT / "specs" / "py-20261007-fdc6-ruff-config.toml"
 
 
 def _pyproject_ruff() -> dict:
-    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    data = tomllib.loads(RUFF_CONFIG_FRAGMENT.read_text(encoding="utf-8"))
     return data["tool"]["ruff"]
 
 
@@ -22,16 +23,18 @@ def test_REQ_1_pyproject_ruff_line_length_and_migrated_settings():
 
 
 def test_REQ_2_ruff_check_show_settings_reports_line_length_140():
-    result = subprocess.run(
-        [sys.executable, "-m", "ruff", "check", "--show-settings", "."],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    match = re.search(r"^linter\.line_length\s*=\s*(\d+)", result.stdout, re.MULTILINE)
-    assert match is not None
-    assert int(match.group(1)) == 140
+    assert _pyproject_ruff()["line-length"] == 140
+    for target in ("src", "tests"):
+        result = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", "--show-settings", target],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        match = re.search(r"^linter\.line_length\s*=\s*(\d+)", result.stdout, re.MULTILINE)
+        assert match is not None
+        assert int(match.group(1)) == 140
 
 
 def test_REQ_3_ruff_format_check_exits_zero_on_repository_tree():

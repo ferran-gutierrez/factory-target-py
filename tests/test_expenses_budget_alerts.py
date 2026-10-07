@@ -5,7 +5,6 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-
 from factory_target_py.expenses import (
     compute_budget_alerts,
     import_expenses,

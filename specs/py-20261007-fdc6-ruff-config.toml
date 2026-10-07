@@ -1,6 +1,7 @@
-line-length = 100
+[tool.ruff]
+line-length = 140
 target-version = "py312"
 src = ["src", "tests"]
 
-[lint]
+[tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
