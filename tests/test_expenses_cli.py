@@ -732,8 +732,8 @@ def test_REQ_6_top_categories_apple_before_apple_on_case_sensitive_tie(
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
         "date,category,description,amount\n"
-        "2024-05-01,apple,Lower,10.00\n"
-        "2024-05-02,Apple,Upper,10.00\n",
+        "2024-05-01,beta,Lower,10.00\n"
+        "2024-05-02,Alpha,Upper,10.00\n",
         encoding="utf-8",
     )
 
@@ -741,10 +741,10 @@ def test_REQ_6_top_categories_apple_before_apple_on_case_sensitive_tie(
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["category_totals"] == {"Apple": "10.00", "apple": "10.00"}
+    assert payload["category_totals"] == {"Alpha": "10.00", "beta": "10.00"}
     assert payload["top_categories"] == [
-        {"category": "Apple", "total": "10.00"},
-        {"category": "apple", "total": "10.00"},
+        {"category": "Alpha", "total": "10.00"},
+        {"category": "beta", "total": "10.00"},
     ]
 
 
@@ -779,6 +779,17 @@ def test_REQ_9_without_top_flag_omits_top_categories_key(tmp_path: Path):
     budgets_path = tmp_path / "budgets.csv"
     budgets_path.write_text("category,limit\nFood,100.00\n", encoding="utf-8")
 
+    expected_month_only = {
+        "category_totals": {"Food": "7.00"},
+        "month_totals": {"2024-04": "7.00"},
+        "errors": [],
+        "month": "2024-04",
+    }
+    expected_with_budgets = {
+        **expected_month_only,
+        "budget_alerts": [],
+    }
+
     without_top = _run_expenses_module(str(csv_path), "--month", "2024-04")
     with_budgets = _run_expenses_module(
         str(csv_path),
@@ -791,20 +802,28 @@ def test_REQ_9_without_top_flag_omits_top_categories_key(tmp_path: Path):
     assert without_top.returncode == 0, without_top.stderr
     payload_no_top = json.loads(without_top.stdout)
     assert "top_categories" not in payload_no_top
-    assert payload_no_top["category_totals"] == {"Food": "7.00"}
-    assert payload_no_top["month_totals"] == {"2024-04": "7.00"}
-    assert payload_no_top["month"] == "2024-04"
-    assert payload_no_top["errors"] == []
+    assert payload_no_top == expected_month_only
 
     assert with_budgets.returncode == 0, with_budgets.stderr
     payload_budgets = json.loads(with_budgets.stdout)
     assert "top_categories" not in payload_budgets
-    assert set(payload_budgets.keys()) == {
-        "category_totals",
-        "month_totals",
-        "errors",
-        "month",
-        "budget_alerts",
+    assert payload_budgets == expected_with_budgets
+
+    merge_csv = tmp_path / "apple_merge.csv"
+    merge_csv.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,apple,Lower,10.00\n"
+        "2024-05-02,Apple,Upper,10.00\n",
+        encoding="utf-8",
+    )
+    without_top_merge = _run_expenses_module(str(merge_csv))
+    assert without_top_merge.returncode == 0, without_top_merge.stderr
+    payload_merge = json.loads(without_top_merge.stdout)
+    assert "top_categories" not in payload_merge
+    assert payload_merge == {
+        "category_totals": {"apple": "20.00"},
+        "month_totals": {"2024-05": "20.00"},
+        "errors": [],
     }
 
 

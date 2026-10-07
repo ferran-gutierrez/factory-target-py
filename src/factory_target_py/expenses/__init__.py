@@ -20,38 +20,6 @@ def _resolve_category_key(categories: dict[str, object], category: str) -> str:
     return category
 
 
-def _should_merge_category_keys(existing: str, new: str) -> bool:
-    if existing == new:
-        return True
-    if existing.casefold() != new.casefold() or len(existing) != len(new):
-        return False
-    if (
-        len(existing) == 5
-        and existing[1:] == new[1:]
-        and existing[0].casefold() == new[0].casefold()
-        and existing[0] != new[0]
-    ):
-        return False
-    return True
-
-
-def _resolve_expense_category_key(
-    canonical_by_normalized: dict[str, str],
-    category_totals: dict[str, Decimal],
-    category: str,
-) -> str:
-    normalized = category.casefold()
-    if normalized in canonical_by_normalized:
-        canonical = canonical_by_normalized[normalized]
-        if _should_merge_category_keys(canonical, category):
-            return canonical
-        if category in category_totals:
-            return category
-        return category
-    canonical_by_normalized[normalized] = category
-    return category
-
-
 def money_to_json_string(value: Decimal) -> str:
     return str(value.quantize(_TWO_PLACES, rounding=ROUND_HALF_UP))
 
@@ -101,9 +69,10 @@ def import_expenses(
             errors.append({"line": line_num, "reason": "invalid amount"})
             continue
 
-        category_key = _resolve_expense_category_key(
-            canonical_by_normalized, category_totals, category
-        )
+        normalized = category.casefold()
+        if normalized not in canonical_by_normalized:
+            canonical_by_normalized[normalized] = category
+        category_key = canonical_by_normalized[normalized]
         category_totals[category_key] = category_totals.get(category_key, _ZERO) + amount
         month_key = date_s[:7]
         month_totals[month_key] = month_totals.get(month_key, _ZERO) + amount
