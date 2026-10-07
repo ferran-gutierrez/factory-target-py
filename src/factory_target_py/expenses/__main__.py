@@ -17,10 +17,12 @@ from factory_target_py.expenses import (
 )
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
-_USAGE_LEGACY = "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>]"
+_USAGE_LEGACY = (
+    "usage: python -m factory_target_py.expenses <csv-file> [--top N] [--budgets <budgets-csv>]"
+)
 _USAGE_WITH_MONTH = (
     "usage: python -m factory_target_py.expenses <csv-file> "
-    "[--month YYYY-MM] [--budgets <budgets-csv>]"
+    "[--month YYYY-MM] [--top N] [--budgets <budgets-csv>]"
 )
 
 
@@ -34,8 +36,17 @@ def _is_valid_month(month: str) -> bool:
     return True
 
 
-def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
-    usage = _USAGE_LEGACY if "--month" not in argv else _USAGE_WITH_MONTH
+def _parse_top_n(value: str) -> int | None:
+    if not value.isascii() or not value.isdigit():
+        return None
+    parsed = int(value)
+    if parsed <= 0:
+        return None
+    return parsed
+
+
+def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None, int | None]:
+    usage = _USAGE_WITH_MONTH if "--month" in argv or "--top" in argv else _USAGE_LEGACY
 
     def fail() -> None:
         print(usage, file=sys.stderr)
@@ -48,6 +59,7 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
     rest = argv[1:]
     month_filter: str | None = None
     budgets_path: Path | None = None
+    top_n: int | None = None
     index = 0
     while index < len(rest):
         token = rest[index]
@@ -57,6 +69,19 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
             if index + 1 >= len(rest):
                 fail()
             month_filter = rest[index + 1]
+            index += 2
+            continue
+        if token == "--top":
+            if top_n is not None:
+                fail()
+            if index + 1 >= len(rest):
+                fail()
+            top_value = rest[index + 1]
+            parsed_top = _parse_top_n(top_value)
+            if parsed_top is None:
+                print(f"invalid --top value: {top_value}", file=sys.stderr)
+                raise SystemExit(1)
+            top_n = parsed_top
             index += 2
             continue
         if token == "--budgets":
@@ -72,7 +97,15 @@ def _parse_cli(argv: list[str]) -> tuple[Path, str | None, Path | None]:
     if month_filter is not None and not _is_valid_month(month_filter):
         fail()
 
-    return expense_path, month_filter, budgets_path
+    return expense_path, month_filter, budgets_path, top_n
+
+
+def _build_top_categories(category_totals_json: dict[str, str], limit: int) -> list[dict[str, str]]:
+    ranked = sorted(
+        category_totals_json.items(),
+        key=lambda item: (-Decimal(item[1]), item[0]),
+    )
+    return [{"category": category, "total": total} for category, total in ranked[:limit]]
 
 
 def _decimal_map_to_json(d: dict[str, Decimal]) -> dict[str, str]:
@@ -95,7 +128,7 @@ def _alerts_to_json(alerts: list[dict]) -> list[dict]:
 
 
 def main() -> None:
-    expense_path, month_filter, budgets_path = _parse_cli(sys.argv[1:])
+    expense_path, month_filter, budgets_path, top_n = _parse_cli(sys.argv[1:])
 
     try:
         csv_text = expense_path.read_text(encoding="utf-8")
@@ -120,6 +153,9 @@ def main() -> None:
 
     if month_filter is not None:
         payload["month"] = month_filter
+
+    if top_n is not None:
+        payload["top_categories"] = _build_top_categories(payload["category_totals"], top_n)
 
     if budgets_path is not None:
         try:
