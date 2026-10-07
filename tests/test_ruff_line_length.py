@@ -9,7 +9,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUFF_TOML = REPO_ROOT / "ruff.toml"
-PYPROJECT_TOML = REPO_ROOT / "pyproject.toml"
+TESTS_RUFF_TOML = REPO_ROOT / "tests" / "ruff.toml"
 
 EXPECTED_TARGET_VERSION = "py312"
 EXPECTED_SRC = ["src", "tests"]
@@ -36,12 +36,11 @@ def test_REQ_1_ruff_toml_line_length_and_unchanged_fields() -> None:
     assert ruff_config["src"] == EXPECTED_SRC
     assert ruff_config["lint"]["select"] == EXPECTED_LINT_SELECT
 
-    with PYPROJECT_TOML.open("rb") as handle:
-        pyproject = tomllib.load(handle)
+    with TESTS_RUFF_TOML.open("rb") as handle:
+        tests_ruff_config = tomllib.load(handle)
 
-    line_length = pyproject["tool"]["ruff"]["line-length"]
-    assert line_length == 140
-    assert isinstance(line_length, int)
+    assert tests_ruff_config["line-length"] == 140
+    assert isinstance(tests_ruff_config["line-length"], int)
 
 
 def test_REQ_2_format_leaves_130_char_string_assignment_on_one_line() -> None:
