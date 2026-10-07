@@ -223,7 +223,9 @@ def test_REQ_4_parse_budgets_csv_raises_duplicate_category(csv_text: str):
 
 
 def test_compute_budget_alerts_amount_over_exact_decimal_for_small_fractions():
-    expense_csv = "date,category,description,amount\n2024-03-01,Food,A,0.10\n2024-03-02,Food,B,0.20\n"
+    expense_csv = (
+        "date,category,description,amount\n2024-03-01,Food,A,0.10\n2024-03-02,Food,B,0.20\n"
+    )
     budget_csv = "category,limit\nFood,0.10\n"
 
     _, _, month_category_totals, errors = import_expenses(expense_csv)

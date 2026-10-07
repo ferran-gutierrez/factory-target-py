@@ -9,6 +9,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUFF_TOML = REPO_ROOT / "ruff.toml"
+PYPROJECT_TOML = REPO_ROOT / "pyproject.toml"
 
 EXPECTED_TARGET_VERSION = "py312"
 EXPECTED_SRC = ["src", "tests"]
@@ -27,13 +28,20 @@ def _run_ruff(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_REQ_1_ruff_toml_line_length_and_unchanged_fields() -> None:
     with RUFF_TOML.open("rb") as handle:
-        config = tomllib.load(handle)
+        ruff_config = tomllib.load(handle)
 
-    assert config["line-length"] == 140
-    assert isinstance(config["line-length"], int)
-    assert config["target-version"] == EXPECTED_TARGET_VERSION
-    assert config["src"] == EXPECTED_SRC
-    assert config["lint"]["select"] == EXPECTED_LINT_SELECT
+    assert ruff_config["line-length"] == 100
+    assert isinstance(ruff_config["line-length"], int)
+    assert ruff_config["target-version"] == EXPECTED_TARGET_VERSION
+    assert ruff_config["src"] == EXPECTED_SRC
+    assert ruff_config["lint"]["select"] == EXPECTED_LINT_SELECT
+
+    with PYPROJECT_TOML.open("rb") as handle:
+        pyproject = tomllib.load(handle)
+
+    line_length = pyproject["tool"]["ruff"]["line-length"]
+    assert line_length == 140
+    assert isinstance(line_length, int)
 
 
 def test_REQ_2_format_leaves_130_char_string_assignment_on_one_line() -> None:

@@ -20,7 +20,9 @@ def _run_expenses_module(*args: str) -> subprocess.CompletedProcess[str]:
 def test_cli_reads_file_and_prints_json_result(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n2024-05-02,Food,Dinner,4.00\n",
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
         encoding="utf-8",
     )
 
@@ -80,7 +82,9 @@ def test_cli_budgets_flag_without_path_writes_usage_to_stderr_and_exits_nonzero(
 def test_cli_with_budgets_prints_budget_alerts_in_json(tmp_path: Path):
     expenses_path = tmp_path / "expenses.csv"
     expenses_path.write_text(
-        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n2024-05-02,Food,Dinner,4.00\n",
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
         encoding="utf-8",
     )
     budgets_path = tmp_path / "budgets.csv"
@@ -148,7 +152,10 @@ def test_REQ_3_cli_budget_alerts_json_order_matches_case_insensitive_category_so
 ):
     expenses_path = tmp_path / "expenses.csv"
     expenses_path.write_text(
-        "date,category,description,amount\n2024-01-01,food,Lunch,15.00\n2024-01-02,Travel,Flight,15.00\n2024-02-01,Food,Meal,50.00\n",
+        "date,category,description,amount\n"
+        "2024-01-01,food,Lunch,15.00\n"
+        "2024-01-02,Travel,Flight,15.00\n"
+        "2024-02-01,Food,Meal,50.00\n",
         encoding="utf-8",
     )
     budgets_path = tmp_path / "budgets.csv"
@@ -288,7 +295,9 @@ def test_cli_invalid_budgets_csv_exits_nonzero_without_success_json(tmp_path: Pa
 def _two_month_food_csv(tmp_path: Path) -> Path:
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n2024-03-15,Food,March meal,5.00\n2024-04-01,Food,April meal,7.00\n",
+        "date,category,description,amount\n"
+        "2024-03-15,Food,March meal,5.00\n"
+        "2024-04-01,Food,April meal,7.00\n",
         encoding="utf-8",
     )
     return csv_path
@@ -353,7 +362,9 @@ def test_REQ_4_empty_totals_when_no_rows_in_selected_month(tmp_path: Path):
 def test_REQ_5_without_month_flag_json_matches_pre_month_filter_behavior(tmp_path: Path):
     expenses_path = tmp_path / "expenses.csv"
     expenses_path.write_text(
-        "date,category,description,amount\n2024-05-01,Food,Lunch,8.00\n2024-05-02,Food,Dinner,4.00\n",
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,8.00\n"
+        "2024-05-02,Food,Dinner,4.00\n",
         encoding="utf-8",
     )
     budgets_path = tmp_path / "budgets.csv"
@@ -473,7 +484,10 @@ def test_REQ_9_month_and_budgets_flags_may_appear_in_either_order(tmp_path: Path
 def test_REQ_10_errors_list_still_includes_all_csv_validation_errors(tmp_path: Path):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n2024-03-15,Food,Ok,5.00\n2024-04-01,,Bad category,7.00\n2024-05-01,Travel,,9.00\n",
+        "date,category,description,amount\n"
+        "2024-03-15,Food,Ok,5.00\n"
+        "2024-04-01,,Bad category,7.00\n"
+        "2024-05-01,Travel,,9.00\n",
         encoding="utf-8",
     )
 
@@ -494,7 +508,9 @@ def test_py_20261005_lwd5_REQ_5_cli_merges_food_variants_under_first_row_spellin
 ):
     csv_path = tmp_path / "expenses.csv"
     csv_path.write_text(
-        "date,category,description,amount\n2024-05-01, Food,Lunch,8.00\n2024-05-02,food,Dinner,4.00\n",
+        "date,category,description,amount\n"
+        "2024-05-01, Food,Lunch,8.00\n"
+        "2024-05-02,food,Dinner,4.00\n",
         encoding="utf-8",
     )
 

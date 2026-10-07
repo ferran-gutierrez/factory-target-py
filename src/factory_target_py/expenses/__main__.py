@@ -18,7 +18,10 @@ from factory_target_py.expenses import (
 
 _MONTH_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 _USAGE_LEGACY = "usage: python -m factory_target_py.expenses <csv-file> [--budgets <budgets-csv>]"
-_USAGE_WITH_MONTH = "usage: python -m factory_target_py.expenses <csv-file> [--month YYYY-MM] [--budgets <budgets-csv>]"
+_USAGE_WITH_MONTH = (
+    "usage: python -m factory_target_py.expenses <csv-file> "
+    "[--month YYYY-MM] [--budgets <budgets-csv>]"
+)
 
 
 def _is_valid_month(month: str) -> bool:
@@ -104,7 +107,9 @@ def main() -> None:
 
     if month_filter is not None:
         category_totals = dict(month_category_totals.get(month_filter, {}))
-        month_totals = {month_filter: month_totals[month_filter]} if month_filter in month_totals else {}
+        month_totals = (
+            {month_filter: month_totals[month_filter]} if month_filter in month_totals else {}
+        )
         month_category_totals = {month_filter: dict(category_totals)}
 
     payload: dict = {
@@ -127,7 +132,9 @@ def main() -> None:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             raise SystemExit(1) from exc
-        payload["budget_alerts"] = _alerts_to_json(compute_budget_alerts(month_category_totals, budgets))
+        payload["budget_alerts"] = _alerts_to_json(
+            compute_budget_alerts(month_category_totals, budgets)
+        )
 
     print(json.dumps(payload))
 
