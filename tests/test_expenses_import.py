@@ -178,11 +178,7 @@ def test_valid_rows_aggregate_by_category_and_month():
 
 
 def test_REQ_1_case_insensitive_categories_merge_under_first_row_spelling():
-    csv_text = (
-        "date,category,description,amount\n"
-        "2024-06-01, Food,Lunch,4.00\n"
-        "2024-06-02,FOOD ,Dinner,6.00\n"
-    )
+    csv_text = "date,category,description,amount\n2024-06-01, Food,Lunch,4.00\n2024-06-02,FOOD ,Dinner,6.00\n"
     category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
     assert errors == []
     assert set(category_totals.keys()) == {"Food"}
@@ -194,12 +190,7 @@ def test_REQ_1_case_insensitive_categories_merge_under_first_row_spelling():
 
 
 def test_REQ_2_same_month_travel_variants_merge_under_first_canonical_key():
-    csv_text = (
-        "date,category,description,amount\n"
-        "2024-05-10,travel,Leg1,1.00\n"
-        "2024-05-11, Travel,Leg2,2.00\n"
-        "2024-05-12,TRAVEL,Leg3,3.00\n"
-    )
+    csv_text = "date,category,description,amount\n2024-05-10,travel,Leg1,1.00\n2024-05-11, Travel,Leg2,2.00\n2024-05-12,TRAVEL,Leg3,3.00\n"
     category_totals, month_totals, month_category_totals, errors = import_expenses(csv_text)
     assert errors == []
     assert category_totals == {"travel": Decimal("6.00")}
@@ -211,12 +202,7 @@ def test_REQ_2_same_month_travel_variants_merge_under_first_canonical_key():
 
 
 def test_totals_equal_mathematical_sum_of_parsed_amounts():
-    csv_text = (
-        "date,category,description,amount\n"
-        "2024-03-01,Food,A,0.10\n"
-        "2024-03-02,Food,B,0.20\n"
-        "2024-03-03,Food,C,0.30\n"
-    )
+    csv_text = "date,category,description,amount\n2024-03-01,Food,A,0.10\n2024-03-02,Food,B,0.20\n2024-03-03,Food,C,0.30\n"
     category_totals, month_totals, _, errors = import_expenses(csv_text)
     assert errors == []
     assert category_totals["Food"] == Decimal("0.60")
