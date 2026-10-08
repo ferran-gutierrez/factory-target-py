@@ -1,0 +1,10 @@
+date,category,description,amount
+2024-01-15,Food,Lunch,12.50
+2024-01-16,Food
+2024-02-01,Travel,Flight,100.00
+not-a-date,Food,Trip,10.00
+2024-01-20,,Missing category,5.00
+2024-01-21,Retail,,5.00
+2024-01-22,Retail,Zero amount,0
+2024-01-23,Retail,Bad amount,abc
+2024-03-01,Food,Dinner,7.50
