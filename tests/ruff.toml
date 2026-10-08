@@ -1,2 +1,0 @@
-extend = "../ruff.toml"
-line-length = 140

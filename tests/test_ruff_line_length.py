@@ -10,9 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RUFF_TOML = ROOT / "ruff.toml"
-SRC_RUFF_TOML = ROOT / "src" / "ruff.toml"
 TESTS_DIR = Path(__file__).resolve().parent
-TESTS_RUFF_TOML = TESTS_DIR / "ruff.toml"
 RUFF_LINE_LENGTH_WORK = TESTS_DIR / "ruff_line_length_work"
 
 
@@ -37,20 +35,15 @@ def _run_ruff(*args: str, cwd: Path | None = None) -> subprocess.CompletedProces
 
 
 def test_REQ_1_ruff_toml_sets_line_length_140_and_preserves_other_keys():
-    root = tomllib.loads(RUFF_TOML.read_text(encoding="utf-8"))
-    assert root["line-length"] == 100
-    assert root["target-version"] == "py312"
-    assert root["src"] == ["src", "tests"]
-    assert root["lint"]["select"] == ["E", "F", "I", "B", "UP"]
-    for path in (SRC_RUFF_TOML, TESTS_RUFF_TOML):
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-        assert data["line-length"] == 140
-        assert data["extend"] == "../ruff.toml"
+    data = tomllib.loads(RUFF_TOML.read_text(encoding="utf-8"))
+    assert data["line-length"] == 140
+    assert data["target-version"] == "py312"
+    assert data["src"] == ["src", "tests"]
+    assert data["lint"]["select"] == ["E", "F", "I", "B", "UP"]
 
 
 def test_REQ_2_ruff_show_settings_reports_line_length_140():
-    target = ROOT / "src" / "factory_target_py" / "__init__.py"
-    result = _run_ruff("check", "--show-settings", str(target))
+    result = _run_ruff("check", "--show-settings")
     assert result.returncode == 0, result.stderr
     output = result.stdout
     assert "linter.line_length = 140" in output
