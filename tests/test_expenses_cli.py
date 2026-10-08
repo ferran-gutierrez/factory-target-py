@@ -620,3 +620,183 @@ def test_REQ_11_file_errors_unchanged_when_month_flag_is_present(tmp_path: Path)
     assert invalid_budget.returncode != 0
     assert invalid_budget.stderr.strip() == "invalid limit"
     assert invalid_budget.stdout.strip() == ""
+
+
+def _multi_category_expenses_csv(tmp_path: Path) -> Path:
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,Lunch,30.00\n"
+        "2024-05-02,Travel,Flight,50.00\n"
+        "2024-05-03,Utilities,Bill,20.00\n",
+        encoding="utf-8",
+    )
+    return csv_path
+
+
+def test_REQ_1_top_flag_adds_top_categories_array(tmp_path: Path):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert "top_categories" in payload
+    assert isinstance(payload["top_categories"], list)
+
+
+def test_REQ_2_top_categories_entries_use_category_and_total_strings(tmp_path: Path):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--top", "1")
+
+    assert result.returncode == 0, result.stderr
+    entry = json.loads(result.stdout)["top_categories"][0]
+    assert set(entry.keys()) == {"category", "total"}
+    assert isinstance(entry["category"], str)
+    assert isinstance(entry["total"], str)
+    assert entry["total"] == "50.00"
+
+
+def test_REQ_3_top_categories_totals_match_category_totals(tmp_path: Path):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--top", "3")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    for entry in payload["top_categories"]:
+        assert entry["total"] == payload["category_totals"][entry["category"]]
+
+
+def test_REQ_4_top_categories_ordered_by_total_then_category_name(tmp_path: Path):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n"
+        "2024-05-01,Food,A,10.00\n"
+        "2024-05-02,Travel,B,30.00\n"
+        "2024-05-03,Utilities,C,20.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "3")
+
+    assert result.returncode == 0, result.stderr
+    categories = [entry["category"] for entry in json.loads(result.stdout)["top_categories"]]
+    assert categories == ["Travel", "Utilities", "Food"]
+
+
+def test_REQ_5_top_limits_entries_and_includes_all_when_n_exceeds_categories(
+    tmp_path: Path,
+):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+
+    limited = _run_expenses_module(str(csv_path), "--top", "2")
+    assert limited.returncode == 0, limited.stderr
+    assert len(json.loads(limited.stdout)["top_categories"]) == 2
+
+    all_categories = _run_expenses_module(str(csv_path), "--top", "10")
+    assert all_categories.returncode == 0, all_categories.stderr
+    payload = json.loads(all_categories.stdout)
+    assert len(payload["top_categories"]) == len(payload["category_totals"])
+
+
+def test_REQ_6_top_categories_empty_when_filtered_month_has_no_categories(tmp_path: Path):
+    csv_path = _two_month_food_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--month", "2024-01", "--top", "3")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["category_totals"] == {}
+    assert payload["top_categories"] == []
+
+
+def test_REQ_7_without_top_flag_omits_top_categories_key(tmp_path: Path):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path))
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert "top_categories" not in payload
+    assert set(payload.keys()) == {"category_totals", "month_totals", "errors"}
+
+
+def test_REQ_8_invalid_top_values_write_dedicated_error_no_stdout(tmp_path: Path):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+    invalid_values = ("0", "-1", "1.5", "abc", "  ")
+
+    for value in invalid_values:
+        result = _run_expenses_module(str(csv_path), "--top", value)
+        assert result.returncode == 1, value
+        assert result.stdout.strip() == "", value
+        stderr_lower = result.stderr.lower()
+        assert "usage" not in stderr_lower, value
+        assert "--top" in stderr_lower or "positive" in stderr_lower, value
+
+
+def test_REQ_9_tied_totals_sort_categories_lexicographically_banana_before_apple(
+    tmp_path: Path,
+):
+    csv_path = tmp_path / "expenses.csv"
+    csv_path.write_text(
+        "date,category,description,amount\n2024-05-01,apple,A,5.00\n2024-05-02,Banana,B,5.00\n",
+        encoding="utf-8",
+    )
+
+    result = _run_expenses_module(str(csv_path), "--top", "2")
+
+    assert result.returncode == 0, result.stderr
+    categories = [entry["category"] for entry in json.loads(result.stdout)["top_categories"]]
+    assert categories == ["Banana", "apple"]
+
+
+def test_REQ_10_top_month_and_budgets_flags_may_appear_in_any_order(tmp_path: Path):
+    expenses_path = _multi_category_expenses_csv(tmp_path)
+    budgets_path = tmp_path / "budgets.csv"
+    budgets_path.write_text("category,limit\nTravel,40.00\n", encoding="utf-8")
+
+    permutations = [
+        (str(expenses_path), "--top", "2", "--month", "2024-05", "--budgets", str(budgets_path)),
+        (str(expenses_path), "--budgets", str(budgets_path), "--top", "2", "--month", "2024-05"),
+        (str(expenses_path), "--month", "2024-05", "--budgets", str(budgets_path), "--top", "2"),
+    ]
+    payloads = []
+    for args in permutations:
+        result = _run_expenses_module(*args)
+        assert result.returncode == 0, result.stderr
+        payloads.append(json.loads(result.stdout))
+
+    assert payloads[0] == payloads[1] == payloads[2]
+    assert len(payloads[0]["top_categories"]) == 2
+
+
+def test_REQ_11_top_usage_errors_for_missing_value_duplicate_and_unknown_token(
+    tmp_path: Path,
+):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+
+    missing_value = _run_expenses_module(str(csv_path), "--top")
+    assert missing_value.returncode != 0
+    assert "usage" in missing_value.stderr.lower()
+    assert missing_value.stdout.strip() == ""
+
+    duplicate = _run_expenses_module(str(csv_path), "--top", "1", "--top", "2")
+    assert duplicate.returncode != 0
+    assert "usage" in duplicate.stderr.lower()
+    assert duplicate.stdout.strip() == ""
+
+    unknown = _run_expenses_module(str(csv_path), "--unknown")
+    assert unknown.returncode != 0
+    assert "usage" in unknown.stderr.lower()
+    assert unknown.stdout.strip() == ""
+
+
+def test_top_accepts_leading_zeros_as_positive_integer(tmp_path: Path):
+    csv_path = _multi_category_expenses_csv(tmp_path)
+
+    result = _run_expenses_module(str(csv_path), "--top", "01")
+
+    assert result.returncode == 0, result.stderr
+    assert len(json.loads(result.stdout)["top_categories"]) == 1
