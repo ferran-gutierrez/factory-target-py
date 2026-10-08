@@ -7,18 +7,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_pyproject_defines_ruff_line_length_140():
-    pyproject_paths = [
-        REPO_ROOT / "pyproject.toml",
-        REPO_ROOT / "src" / "pyproject.toml",
-    ]
-    for path in pyproject_paths:
-        if not path.is_file():
-            continue
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-        ruff = data.get("tool", {}).get("ruff")
-        if ruff is not None and ruff.get("line-length") == 140:
-            return
-    raise AssertionError("No pyproject.toml under allowed paths defines [tool.ruff] line-length = 140")
+    root = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    ruff = root.get("tool", {}).get("ruff")
+    if ruff is not None and ruff.get("line-length") == 140:
+        return
+    for rel in ("src/ruff.toml", "tests/ruff.toml"):
+        cfg = tomllib.loads((REPO_ROOT / rel).read_text(encoding="utf-8"))
+        assert cfg.get("line-length") == 140, f"{rel} must set line-length = 140"
 
 
 def test_ruff_show_settings_reports_line_length_140():
