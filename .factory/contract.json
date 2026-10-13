@@ -1,21 +1,68 @@
 {
   "contractVersion": 1,
   "language": "python",
-  "ci": { "runner": "ubuntu-24.04", "python": "3.12" },
-  "setup": [{ "name": "install", "command": "python -m pip install -e '.[dev]'", "timeoutSec": 300 }],
-  "checks": [
-    { "name": "lint", "command": "ruff check .", "timeoutSec": 120 },
-    { "name": "format", "command": "ruff format --check .", "timeoutSec": 120 },
-    { "name": "unit", "command": "pytest -q", "timeoutSec": 300 }
+  "ci": {
+    "runner": "ubuntu-24.04",
+    "python": "3.12"
+  },
+  "setup": [
+    {
+      "name": "install",
+      "command": "python -m pip install -e '.[dev]'",
+      "timeoutSec": 300
+    }
   ],
-  "e2e": { "applies": false },
+  "checks": [
+    {
+      "name": "lint",
+      "command": "ruff check .",
+      "timeoutSec": 120
+    },
+    {
+      "name": "format",
+      "command": "ruff format --check .",
+      "timeoutSec": 120
+    },
+    {
+      "name": "unit",
+      "command": "pytest -q",
+      "timeoutSec": 300
+    }
+  ],
+  "e2e": {
+    "applies": false
+  },
   "paths": {
     "specsDir": "specs",
-    "allowed": ["src/**", "tests/**", "specs/**", "pyproject.toml"],
-    "protected": [],
-    "tests": ["tests/**"],
-    "checkDefinitions": ["ruff.toml", "pytest.ini", "**/conftest.py"],
-    "sensitive": ["pyproject.toml"]
+    "allowed": [
+      "src/**",
+      "tests/**",
+      "specs/**",
+      "pyproject.toml"
+    ],
+    "protected": [
+      "docs/factory/**",
+      "**/AGENTS.md",
+      "**/CLAUDE.md",
+      ".env*"
+    ],
+    "tests": [
+      "tests/**"
+    ],
+    "checkDefinitions": [
+      "ruff.toml",
+      "pytest.ini",
+      "**/conftest.py"
+    ],
+    "sensitive": [
+      "pyproject.toml"
+    ]
   },
-  "env": { "required": [] }
+  "env": {
+    "required": []
+  },
+  "standards": [
+    "AGENTS.md",
+    "docs/factory/feature-inventory.md"
+  ]
 }
